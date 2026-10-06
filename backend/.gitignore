@@ -1,0 +1,21 @@
+# dependencies
+/node_modules
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# locks
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# environment files
+.env*
+
+# typescript
+*.tsbuildinfo
+/dist
