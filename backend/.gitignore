@@ -14,7 +14,7 @@ yarn.lock
 pnpm-lock.yaml
 
 # environment files
-.env*
+.env
 
 # typescript
 *.tsbuildinfo
