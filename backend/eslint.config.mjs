@@ -15,6 +15,7 @@ export default defineConfig({
   rules: {
     "quotes": ["error", "double"],
     "@typescript-eslint/restrict-template-expressions": "off",
+    "max-len": ["error", { "code": 140, "tabWidth": 2, "ignoreComments": true, "ignoreUrls": true, "ignoreTrailingComments": true }]
   },
   languageOptions: {
     parserOptions: {

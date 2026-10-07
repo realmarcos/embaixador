@@ -19,3 +19,6 @@ pnpm-lock.yaml
 # typescript
 *.tsbuildinfo
 /dist
+
+# Vitest reports and artifacts
+.vitest/
