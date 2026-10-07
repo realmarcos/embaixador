@@ -1,0 +1,317 @@
+openapi: 3.1.0
+info:
+  title: Embaixador API
+  version: 1.0.0
+  description: Authenticated API for private media analysis, downloads, history, and settings.
+servers:
+  - url: /api
+security:
+  - sessionCookie: []
+paths:
+  /auth/register:
+    post:
+      security: []
+      summary: Create an account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email, password]
+              properties:
+                name: { type: string, minLength: 1, maxLength: 120 }
+                email: { type: string, format: email, maxLength: 254 }
+                password: { type: string, minLength: 12, maxLength: 128 }
+      responses:
+        '201':
+          description: Account created; response excludes password/hash.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Account' }
+        '400': { $ref: '#/components/responses/ApiError' }
+        '409': { $ref: '#/components/responses/ApiError' }
+  /auth/login:
+    post:
+      security: []
+      summary: Authenticate and set the signed session cookie
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string, minLength: 1, maxLength: 128 }
+      responses:
+        '200':
+          description: Authenticated; sets an HttpOnly, Secure-in-production, SameSite cookie.
+          headers:
+            Set-Cookie:
+              schema: { type: string }
+              description: Signed JWS session cookie; never expose token in JSON.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [account]
+                properties:
+                  account: { $ref: '#/components/schemas/Account' }
+        '401': { $ref: '#/components/responses/ApiError' }
+  /auth/logout:
+    post:
+      summary: Clear the session cookie
+      responses:
+        '204': { description: Session cookie cleared. }
+        '401': { $ref: '#/components/responses/ApiError' }
+  /auth/me:
+    get:
+      summary: Return the authenticated account
+      responses:
+        '200':
+          description: Current account.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Account' }
+        '401': { $ref: '#/components/responses/ApiError' }
+  /media/analysis:
+    post:
+      summary: Inspect an allowlisted media page and list available options
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url]
+              properties:
+                url: { type: string, format: uri, maxLength: 2048 }
+      responses:
+        '200':
+          description: Available platform and media options; provider URLs and raw metadata are omitted.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [platform, options]
+                properties:
+                  platform: { type: string, enum: [YOUTUBE, INSTAGRAM, FACEBOOK] }
+                  title: { type: string }
+                  thumbnailUrl: { type: string, format: uri }
+                  options:
+                    type: array
+                    items: { $ref: '#/components/schemas/MediaOption' }
+        '400': { $ref: '#/components/responses/ApiError' }
+        '422': { $ref: '#/components/responses/ApiError' }
+        '429': { $ref: '#/components/responses/ApiError' }
+  /downloads:
+    post:
+      summary: Queue a media download and create its history record
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url, formatId]
+              properties:
+                url: { type: string, format: uri, maxLength: 2048 }
+                formatId: { type: string, maxLength: 128 }
+                targetContainer: { type: string, maxLength: 16 }
+                targetHeight: { type: integer, minimum: 1, maximum: 8640 }
+      responses:
+        '202':
+          description: Job accepted; poll its resource for status.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Download' }
+        '400': { $ref: '#/components/responses/ApiError' }
+        '401': { $ref: '#/components/responses/ApiError' }
+        '422': { $ref: '#/components/responses/ApiError' }
+  /downloads/{downloadId}:
+    parameters:
+      - $ref: '#/components/parameters/DownloadId'
+    get:
+      summary: Read one owned download job/history item
+      responses:
+        '200':
+          description: Download status and safe history metadata.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Download' }
+        '404': { $ref: '#/components/responses/ApiError' }
+  /downloads/{downloadId}/file:
+    parameters:
+      - $ref: '#/components/parameters/DownloadId'
+    get:
+      summary: Stream an owned, unexpired media object
+      responses:
+        '200':
+          description: Private media stream after authentication, ownership, state, and expiry checks.
+          headers:
+            Content-Disposition: { schema: { type: string } }
+            Cache-Control: { schema: { type: string, const: 'private, no-store' } }
+          content:
+            application/octet-stream: { schema: { type: string, format: binary } }
+        '404': { $ref: '#/components/responses/ApiError' }
+        '410': { $ref: '#/components/responses/ApiError' }
+  /downloads/{downloadId}/media:
+    parameters:
+      - $ref: '#/components/parameters/DownloadId'
+    delete:
+      summary: Delete the media object while retaining its history record
+      responses:
+        '204': { description: Media removed; history record remains marked MEDIA_DELETED. }
+        '404': { $ref: '#/components/responses/ApiError' }
+        '409': { $ref: '#/components/responses/ApiError' }
+  /history:
+    get:
+      summary: List the authenticated account's history
+      parameters:
+        - in: query
+          name: cursor
+          schema: { type: string }
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+      responses:
+        '200':
+          description: Only records belonging to the authenticated account.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/Download' }
+                  nextCursor: { type: string, nullable: true }
+        '401': { $ref: '#/components/responses/ApiError' }
+    delete:
+      summary: Delete all owned history records and their associated retained objects
+      responses:
+        '204': { description: Owned history and associated media removed. }
+        '401': { $ref: '#/components/responses/ApiError' }
+  /history/{downloadId}:
+    parameters:
+      - $ref: '#/components/parameters/DownloadId'
+    delete:
+      summary: Delete one owned history record and its associated retained object
+      responses:
+        '204': { description: History record and associated object removed. }
+        '404': { $ref: '#/components/responses/ApiError' }
+  /history/{downloadId}/redownload:
+    parameters:
+      - $ref: '#/components/parameters/DownloadId'
+    post:
+      summary: Re-analyze the source and queue a new owned download
+      responses:
+        '202':
+          description: New download job created; availability and options are checked again.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Download' }
+        '404': { $ref: '#/components/responses/ApiError' }
+        '422': { $ref: '#/components/responses/ApiError' }
+  /settings:
+    get:
+      summary: Read the authenticated account's preferences
+      responses:
+        '200':
+          description: Current theme and retention preference.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Settings' }
+        '401': { $ref: '#/components/responses/ApiError' }
+    patch:
+      summary: Update the authenticated account's preferences
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              minProperties: 1
+              properties:
+                theme: { type: string, enum: [LIGHT, DARK] }
+                retentionHours: { type: integer, enum: [1, 8, 24, 72, 168, 336, 720] }
+      responses:
+        '200':
+          description: Saved settings. Retention changes apply only to downloads becoming ready later.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Settings' }
+        '400': { $ref: '#/components/responses/ApiError' }
+        '401': { $ref: '#/components/responses/ApiError' }
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: embaixador_session
+      description: Signed JWS token; short-lived, Secure in production, HttpOnly, SameSite=Lax.
+  parameters:
+    DownloadId:
+      in: path
+      name: downloadId
+      required: true
+      schema: { type: string, format: uuid }
+  schemas:
+    Account:
+      type: object
+      required: [id, name, email]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        email: { type: string, format: email }
+        avatar: { type: string, nullable: true }
+    MediaOption:
+      type: object
+      required: [id, container]
+      properties:
+        id: { type: string }
+        container: { type: string }
+        width: { type: integer, nullable: true }
+        height: { type: integer, nullable: true }
+        qualityLabel: { type: string, nullable: true }
+        isOriginal: { type: boolean, default: false }
+    Download:
+      type: object
+      required: [id, platform, status, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        platform: { type: string, enum: [YOUTUBE, INSTAGRAM, FACEBOOK] }
+        title: { type: string, nullable: true }
+        status: { type: string, enum: [QUEUED, PROCESSING, READY, FAILED, MEDIA_DELETED, EXPIRED, DELETE_FAILED] }
+        fileName: { type: string, nullable: true }
+        mimeType: { type: string, nullable: true }
+        sizeBytes: { type: integer, nullable: true }
+        expiresAt: { type: string, format: date-time, nullable: true }
+        failureCode: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+    Settings:
+      type: object
+      required: [theme, retentionHours]
+      properties:
+        theme: { type: string, enum: [LIGHT, DARK] }
+        retentionHours: { type: integer, enum: [1, 8, 24, 72, 168, 336, 720] }
+    ApiError:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, requestId]
+          properties:
+            code: { type: string }
+            message: { type: string }
+            requestId: { type: string }
+  responses:
+    ApiError:
+      description: Safe, user-readable error; excludes raw provider errors, URLs, secrets, and stack traces.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ApiError' }
