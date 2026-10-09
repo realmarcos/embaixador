@@ -38,6 +38,16 @@
 - [ ] CHK011 - Os requisitos definem ou explicitamente herdam limites de duração para análise e conversão de mídia? [Gap, Spec §Success Criteria; Plan §Technical Context]
 - [ ] CHK012 - A dependência de encoders disponíveis para MP3 e áudio MP4 está ligada a critérios claros para oferecer ou omitir esses presets? [Dependency, Spec §FR-002, FR-003; Plan §Technical Context]
 
+## Cross-Artifact Requirements
+
+- [ ] CHK013 - O contrato define como o preset selecionado é representado também no registro de download/histórico, além da resposta de análise? [Completeness, Spec §FR-009; Contract §/downloads]
+- [ ] CHK014 - O plano e os critérios de conclusão refletem a exigência constitucional de testes unitários backend próximos de 100% e justificativa para lacunas? [Consistency, Constitution §VIII; Plan §Constitution Check; Gap]
+- [ ] CHK015 - A persistência especifica defaults ou backfill para novos campos em downloads existentes, sem deixar o processamento de registros legados ambíguo? [Dependency, Plan §Storage; Data Model §Download Selection; Gap]
+
+## Recovery and Acceptance Coverage
+
+- [ ] CHK016 - Os critérios de aceitação cobrem o resultado definido para falha de conversão, incluindo que nenhum arquivo parcial fique disponível? [Coverage, Exception Flow; Spec §Edge Cases, FR-010]
+
 ## Notes
 
 - Marque itens `[x]` somente após a revisão de qualidade dos requisitos; mantenha itens pendentes desmarcados.

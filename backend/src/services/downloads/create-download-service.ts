@@ -8,16 +8,17 @@ import { EncryptedSourceUrl } from "./source-url-encryptor";
 interface CreateDownloadServiceInput {
   userId: string;
   sourceUrl: string;
-  formatId: string;
-  targetContainer?: string;
-  targetHeight?: number;
+  presetId?: string;
+  legacyFormatId?: string;
+  legacyTargetContainer?: string | null;
+  legacyTargetHeight?: number | null;
   replayOfId?: string;
 }
 
 interface CreateDownloadServiceDependencies {
   downloadRepository: Pick<DownloadRepository, "createQueued">;
   urlValidator: Pick<ValidateMediaUrlService, "execute">;
-  analyzeMediaService: Pick<AnalyzeMediaService, "execute">;
+  analyzeMediaService: Pick<AnalyzeMediaService, "executeWithCatalog">;
   encryptSourceUrl: (sourceUrl: string) => EncryptedSourceUrl;
 }
 
@@ -34,14 +35,17 @@ class CreateDownloadService {
 
   async execute(input: CreateDownloadServiceInput): Promise<Download> {
     const validatedUrl = await this.dependencies.urlValidator.execute(input.sourceUrl);
-    const analysis = await this.dependencies.analyzeMediaService.execute(validatedUrl.url);
-    const option = analysis.options.find((candidate) => candidate.id === input.formatId);
+    const { analysis, presets } = await this.dependencies.analyzeMediaService.executeWithCatalog(validatedUrl.url);
+    const preset = input.presetId
+      ? presets.find((candidate) => candidate.id === input.presetId)
+      : input.legacyFormatId
+        ? presets.find((candidate) =>
+          candidate.sourceFormatId === input.legacyFormatId &&
+          candidate.targetContainer === input.legacyTargetContainer &&
+          candidate.targetHeight === input.legacyTargetHeight)
+        : undefined;
 
-    if (
-      !option ||
-      (input.targetContainer !== undefined && option.container !== input.targetContainer.toLowerCase()) ||
-      (input.targetHeight !== undefined && option.height !== input.targetHeight)
-    ) {
+    if (!preset) {
       throw formatUnavailableError();
     }
 
@@ -53,9 +57,12 @@ class CreateDownloadService {
       sourceUrlIv: encryptedSourceUrl.iv,
       sourceUrlTag: encryptedSourceUrl.tag,
       sourceUrlKeyVersion: encryptedSourceUrl.keyVersion,
-      selectedFormatId: option.id,
-      targetContainer: input.targetContainer,
-      targetHeight: input.targetHeight,
+      selectedPresetId: preset.id,
+      selectedFormatId: preset.sourceFormatId,
+      targetContainer: preset.targetContainer,
+      targetHeight: preset.targetHeight,
+      targetWidth: preset.targetWidth,
+      targetAudioOnly: preset.targetAudioOnly,
       ...(input.replayOfId ? { replayOfId: input.replayOfId } : {}),
     };
 

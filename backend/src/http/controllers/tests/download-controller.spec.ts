@@ -14,8 +14,11 @@ const readyDownload: Download = {
   sourceUrlKeyVersion: "v1",
   title: "Private video",
   selectedFormatId: "format-1",
+  selectedPresetId: "video-720p",
   targetContainer: null,
   targetHeight: null,
+  targetWidth: null,
+  targetAudioOnly: false,
   status: "READY",
   storageObjectKey: "private-object-key",
   fileName: "../private\r\nname.mp4",
@@ -67,22 +70,30 @@ describe("download controller", () => {
   });
 
   it("rejects anonymous and malformed creation requests", async () => {
-    const anonymous = createContext({ body: { url: "https://youtube.com/watch?v=x", formatId: "18" } });
+    const anonymous = createContext({ body: { url: "https://youtube.com/watch?v=x", presetId: "video-720p" } });
     const unauthenticated = vi.fn();
     await controller.create(anonymous.request, anonymous.response, unauthenticated);
     expect(unauthenticated.mock.calls[0]?.[0]).toMatchObject({ statusCode: 401 });
 
-    const invalid = createContext({ userId: "owner-1", body: { url: "", formatId: 2 } });
+    const invalid = createContext({ userId: "owner-1", body: { url: "", presetId: 2 } });
     const invalidRequest = vi.fn();
     await controller.create(invalid.request, invalid.response, invalidRequest);
     expect(invalidRequest.mock.calls[0]?.[0]).toMatchObject({ code: "INVALID_REQUEST", statusCode: 400 });
     expect(createDownloadService.execute).not.toHaveBeenCalled();
+
+    const oversizedPreset = createContext({
+      userId: "owner-1",
+      body: { url: "https://youtube.com/watch?v=x", presetId: "x".repeat(65) },
+    });
+    const oversizedRequest = vi.fn();
+    await controller.create(oversizedPreset.request, oversizedPreset.response, oversizedRequest);
+    expect(oversizedRequest.mock.calls[0]?.[0]).toMatchObject({ code: "INVALID_REQUEST", statusCode: 400 });
   });
 
   it("queues for the authenticated owner and omits internal fields", async () => {
     const context = createContext({
       userId: "owner-1",
-      body: { url: "https://youtube.com/watch?v=x", formatId: "18", targetContainer: "mp4", targetHeight: 720 },
+      body: { url: "https://youtube.com/watch?v=x", presetId: "video-720p" },
     });
 
     await controller.create(context.request, context.response, vi.fn());
@@ -90,12 +101,11 @@ describe("download controller", () => {
     expect(createDownloadService.execute).toHaveBeenCalledWith({
       userId: "owner-1",
       sourceUrl: "https://youtube.com/watch?v=x",
-      formatId: "18",
-      targetContainer: "mp4",
-      targetHeight: 720,
+      presetId: "video-720p",
     });
     expect(context.state.statusCode).toBe(202);
     const body = context.state.body as Record<string, unknown>;
+    expect(body.selectedPresetId).toBe("video-720p");
     expect(body.sizeBytes).toBe(12);
     expect(body).not.toHaveProperty("userId");
     expect(body).not.toHaveProperty("sourceUrlCiphertext");

@@ -98,7 +98,12 @@ class ProcessDownloadJobService {
       });
 
       let completedMedia: DownloadedMedia = extractedMedia;
-      if (download.targetContainer !== null || download.targetHeight !== null) {
+      if (
+        download.targetContainer !== null ||
+        download.targetHeight !== null ||
+        download.targetWidth !== null ||
+        download.targetAudioOnly
+      ) {
         failureCode = "MEDIA_CONVERSION_FAILED";
         completedMedia = await this.dependencies.mediaConverter.convert({
           filePath: extractedMedia.filePath,
@@ -106,6 +111,8 @@ class ProcessDownloadJobService {
           mimeType: extractedMedia.mimeType,
           targetContainer: download.targetContainer ?? extractedMedia.fileName.split(".").pop() ?? "bin",
           targetHeight: download.targetHeight,
+          targetWidth: download.targetWidth,
+          targetAudioOnly: download.targetAudioOnly,
           outputDirectory: temporaryDirectory,
         });
       }

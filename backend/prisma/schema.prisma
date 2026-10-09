@@ -52,8 +52,11 @@ model Download {
   sourceUrlKeyVersion      String          @db.VarChar(32)
   title                    String?         @db.VarChar(512)
   selectedFormatId         String          @db.VarChar(128)
+  selectedPresetId         String?         @db.VarChar(64)
   targetContainer          String?         @db.VarChar(16)
   targetHeight             Int?
+  targetWidth              Int?
+  targetAudioOnly          Boolean         @default(false)
   status                   DownloadStatus  @default(QUEUED)
   storageObjectKey         String?         @db.VarChar(512)
   fileName                 String?         @db.VarChar(255)

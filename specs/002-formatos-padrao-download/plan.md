@@ -81,10 +81,10 @@ No constitution violations require justification.
 
 - Return one stable preset per output class/resolution rather than exposing provider-specific formats or duplicate encodings.
 - Keep provider format/stream selectors internal. A download request identifies the selected preset; the backend recomputes the catalog from fresh analysis before queueing and rejects a preset that is no longer available.
-- Classify audio/video capabilities from provider codec metadata. Video presets require a source video dimension at least as large as the requested output; audio presets require an audio stream.
+- Classify audio/video capabilities from provider codec metadata. Video presets require known source dimensions and source height at least equal to the requested output height; DCI 2K may pad a narrower image to its 2048-pixel frame without enlarging source pixels. Audio presets require an audio stream.
 - Use the existing FFmpeg converter for MP3, audio-only MP4, and video MP4 conversions. Add explicit audio-only mapping (`-vn`) and correct audio MIME metadata. Original output bypasses conversion.
 - Preserve existing proportional scaling for height presets. For DCI 2K, use a fit-and-pad filter to emit 2048×1080 without stretching or cropping; center the picture and use black side bars.
-- Persist the selected preset identity and the conversion details needed by the worker/history. Use an additive Prisma migration; do not store provider stderr or plaintext source URLs.
+- Persist the selected preset identity and the conversion details needed by the worker/history. Use an additive Prisma migration; `selectedPresetId` is nullable only for pre-feature history, while new downloads always set it. `targetAudioOnly` defaults to false for existing rows. Do not store provider stderr or plaintext source URLs.
 
 ## Post-Design Constitution Check
 

@@ -18,8 +18,11 @@ function createDownload(overrides: Record<string, unknown> = {}) {
     sourceUrlKeyVersion: "v1",
     title: null,
     selectedFormatId: "format-1",
+    selectedPresetId: null,
     targetContainer: null,
     targetHeight: null,
+    targetWidth: null,
+    targetAudioOnly: false,
     status: "QUEUED" as const,
     storageObjectKey: null,
     fileName: null,
@@ -66,7 +69,11 @@ describe("PrismaDownloadRepository", () => {
   beforeEach(() => vi.clearAllMocks());
 
   it("creates a queued row and maps it to the domain model", async () => {
-    download.create.mockResolvedValue(createDownload());
+    download.create.mockResolvedValue(createDownload({
+      selectedPresetId: "audio-mp3",
+      targetContainer: "mp3",
+      targetAudioOnly: true,
+    }));
     const input = {
       userId: "user-1",
       platform: "YOUTUBE" as const,
@@ -75,14 +82,23 @@ describe("PrismaDownloadRepository", () => {
       sourceUrlTag: "tag",
       sourceUrlKeyVersion: "v1",
       selectedFormatId: "format-1",
+      selectedPresetId: "audio-mp3",
+      targetContainer: "mp3",
+      targetAudioOnly: true,
     };
 
-    await expect(repository.createQueued(input)).resolves.toMatchObject({ id: "download-1", status: "QUEUED" });
+    await expect(repository.createQueued(input)).resolves.toMatchObject({
+      id: "download-1",
+      status: "QUEUED",
+      selectedPresetId: "audio-mp3",
+      targetContainer: "mp3",
+      targetAudioOnly: true,
+    });
     expect(download.create).toHaveBeenCalledWith({
       data: {
         ...input,
-        targetContainer: undefined,
         targetHeight: undefined,
+        targetWidth: undefined,
         replayOfId: undefined,
         status: "QUEUED",
       },

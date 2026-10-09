@@ -38,9 +38,13 @@ class RedownloadFromHistoryService {
     return this.dependencies.createDownloadService.execute({
       userId,
       sourceUrl,
-      formatId: sourceDownload.selectedFormatId,
-      ...(sourceDownload.targetContainer ? { targetContainer: sourceDownload.targetContainer } : {}),
-      ...(sourceDownload.targetHeight !== null ? { targetHeight: sourceDownload.targetHeight } : {}),
+      ...(sourceDownload.selectedPresetId
+        ? { presetId: sourceDownload.selectedPresetId }
+        : {
+          legacyFormatId: sourceDownload.selectedFormatId,
+          legacyTargetContainer: sourceDownload.targetContainer,
+          legacyTargetHeight: sourceDownload.targetHeight,
+        }),
       replayOfId: sourceDownload.id,
     });
   }

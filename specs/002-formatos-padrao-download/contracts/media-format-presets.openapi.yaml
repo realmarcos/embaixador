@@ -65,12 +65,50 @@ paths:
       responses:
         '202':
           description: Job accepted; its record includes the selected preset identity.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DownloadRecord'
         '400':
           description: Invalid request.
         '401':
           description: Authentication required.
         '422':
           description: Preset is unavailable for the current media analysis.
+  /history:
+    get:
+      operationId: listDownloadHistory
+      summary: List owned downloads with the selected preset identity
+      parameters:
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+      responses:
+        '200':
+          description: Owner-scoped history page with safe output metadata.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, nextCursor]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/DownloadRecord'
+                  nextCursor:
+                    type: [string, 'null']
+        '401':
+          description: Authentication required.
 components:
   schemas:
     MediaPreset:
@@ -102,3 +140,37 @@ components:
           maximum: 8640
         isOriginal:
           type: boolean
+    DownloadRecord:
+      type: object
+      required: [id, platform, title, status, selectedPresetId, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        platform:
+          type: string
+          enum: [YOUTUBE, INSTAGRAM, FACEBOOK]
+        title:
+          type: [string, 'null']
+        status:
+          type: string
+          enum: [QUEUED, PROCESSING, READY, FAILED, MEDIA_DELETED, EXPIRED, DELETE_FAILED]
+        selectedPresetId:
+          type: [string, 'null']
+          maxLength: 64
+          description: Selected preset for new downloads; null only for legacy history. Never a provider format ID.
+        fileName:
+          type: [string, 'null']
+        mimeType:
+          type: [string, 'null']
+        sizeBytes:
+          type: [integer, 'null']
+          minimum: 0
+        expiresAt:
+          type: [string, 'null']
+          format: date-time
+        failureCode:
+          type: [string, 'null']
+        createdAt:
+          type: string
+          format: date-time

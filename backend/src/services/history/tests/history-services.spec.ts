@@ -17,8 +17,11 @@ const readyDownload: Download = {
   sourceUrlKeyVersion: "v1",
   title: "Private media",
   selectedFormatId: "format-720",
+  selectedPresetId: null,
   targetContainer: null,
   targetHeight: null,
+  targetWidth: null,
+  targetAudioOnly: false,
   status: "READY",
   storageObjectKey: "media/object-1",
   fileName: "video.mp4",
@@ -213,7 +216,9 @@ describe("history services", () => {
     expect(createDownloadService.execute).toHaveBeenCalledWith({
       userId: "owner-1",
       sourceUrl: "https://www.youtube.com/watch?v=private-source",
-      formatId: "format-720",
+      legacyFormatId: "format-720",
+      legacyTargetContainer: null,
+      legacyTargetHeight: null,
       replayOfId: "download-1",
     });
   });
@@ -236,9 +241,9 @@ describe("history services", () => {
     expect(createDownloadService.execute).toHaveBeenLastCalledWith({
       userId: "owner-1",
       sourceUrl: "https://www.youtube.com/watch?v=private-source",
-      formatId: "format-720",
-      targetContainer: "webm",
-      targetHeight: 720,
+      legacyFormatId: "format-720",
+      legacyTargetContainer: "webm",
+      legacyTargetHeight: 720,
       replayOfId: "download-1",
     });
   });

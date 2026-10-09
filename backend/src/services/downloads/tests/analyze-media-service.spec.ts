@@ -27,12 +27,14 @@ describe("AnalyzeMediaService", () => {
       thumbnailUrl: "https://private-cdn.example/thumbnail?token=secret",
       options: [
         {
-          id: "video-720",
+          id: "provider-muxed-720",
           container: "mp4",
           width: 1280,
           height: 720,
           qualityLabel: "720p",
-          isOriginal: false,
+          isOriginal: true,
+          hasAudio: true,
+          hasVideo: true,
           url: "https://private-cdn.example/media?token=secret",
         },
       ],
@@ -47,17 +49,73 @@ describe("AnalyzeMediaService", () => {
       thumbnailUrl: null,
       options: [
         {
-          id: "video-720",
+          id: "original",
+          kind: "original",
+          label: "Original",
           container: "mp4",
           width: 1280,
           height: 720,
-          qualityLabel: "720p",
+          isOriginal: true,
+        },
+        {
+          id: "audio-mp3",
+          kind: "audio",
+          label: "Áudio MP3",
+          container: "mp3",
+          width: null,
+          height: null,
+          isOriginal: false,
+        },
+        {
+          id: "audio-mp4",
+          kind: "audio",
+          label: "Áudio MP4",
+          container: "mp4",
+          width: null,
+          height: null,
+          isOriginal: false,
+        },
+        {
+          id: "video-240p",
+          kind: "video",
+          label: "Vídeo 240p",
+          container: "mp4",
+          width: null,
+          height: 240,
+          isOriginal: false,
+        },
+        {
+          id: "video-360p",
+          kind: "video",
+          label: "Vídeo 360p",
+          container: "mp4",
+          width: null,
+          height: 360,
+          isOriginal: false,
+        },
+        {
+          id: "video-480p",
+          kind: "video",
+          label: "Vídeo 480p",
+          container: "mp4",
+          width: null,
+          height: 480,
+          isOriginal: false,
+        },
+        {
+          id: "video-720p",
+          kind: "video",
+          label: "Vídeo 720p",
+          container: "mp4",
+          width: null,
+          height: 720,
           isOriginal: false,
         },
       ],
     });
     expect(JSON.stringify(result)).not.toContain("private-cdn");
     expect(JSON.stringify(result)).not.toContain("private-cookie");
+    expect(JSON.stringify(result)).not.toContain("provider-muxed-720");
   });
 
   it("rejects extractor metadata for a platform different from the validated host", async () => {

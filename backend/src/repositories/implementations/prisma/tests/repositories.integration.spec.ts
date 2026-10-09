@@ -39,6 +39,11 @@ describe.skipIf(!integrationEnabled)("Prisma repository integration", () => {
           sourceUrlTag: "test-tag",
           sourceUrlKeyVersion: "v1",
           selectedFormatId: "test-format",
+          selectedPresetId: "video-720p",
+          targetContainer: "mp4",
+          targetHeight: 720,
+          targetWidth: null,
+          targetAudioOnly: false,
           status: "QUEUED",
         },
       });
@@ -49,6 +54,9 @@ describe.skipIf(!integrationEnabled)("Prisma repository integration", () => {
         id: download.id,
         userId,
         status: "QUEUED",
+        selectedPresetId: "video-720p",
+        targetHeight: 720,
+        targetAudioOnly: false,
       });
       await expect(history.findByIdForOwner(download.id, randomUUID())).resolves.toBeNull();
       await expect(history.findPage({ userId, cursor: null, limit: 10 })).resolves.toHaveLength(1);

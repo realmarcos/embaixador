@@ -21,6 +21,7 @@ function toPublicDownload(download: Download) {
     platform: download.platform,
     title: download.title,
     status: download.status,
+    selectedPresetId: download.selectedPresetId,
     fileName: download.fileName,
     mimeType: download.mimeType,
     sizeBytes: download.sizeBytes === null ? null : Number(download.sizeBytes),

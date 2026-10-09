@@ -40,12 +40,12 @@ The request-time selection that becomes an owned download record.
 
 | Attribute | Type | Rules |
 |---|---|---|
-| `selectedPresetId` | string | Persisted stable output identity; used for history and to distinguish audio MP4 from video MP4. |
+| `selectedPresetId` | string or null | Persisted stable output identity; new downloads always set it. Null is reserved for pre-feature history where the original output preset cannot be inferred safely. |
 | `selectedFormatId` | string | Existing internal provider source selector field. |
 | `targetContainer` | string or null | Existing output container field; null for original. |
 | `targetHeight` | integer or null | Existing output height field; also 1080 for DCI 2K. |
 | `targetWidth` | integer or null | Additive target width needed for exact 2048×1080 DCI output. |
-| `targetAudioOnly` | boolean | Additive conversion intent; true for MP3/MP4 audio presets and false otherwise. |
+| `targetAudioOnly` | boolean | Additive conversion intent; true for MP3/MP4 audio presets and false otherwise. Existing rows default to false. |
 
 The source URL remains encrypted using the existing ciphertext/IV/tag/key-version fields. Preset data must not include the source URL, credentials, or raw provider diagnostics.
 

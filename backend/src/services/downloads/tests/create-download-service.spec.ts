@@ -5,24 +5,43 @@ import { CreateDownloadService } from "../create-download-service";
 import { FindDownloadService } from "../find-download-service";
 
 const analysis = {
-  platform: "YOUTUBE" as const,
-  title: "Safe title",
-  thumbnailUrl: null,
-  options: [
+  analysis: {
+    platform: "YOUTUBE" as const,
+    title: "Safe title",
+    thumbnailUrl: null,
+    options: [
+      {
+        id: "video-720p",
+        kind: "video" as const,
+        label: "Vídeo 720p",
+        container: "mp4",
+        width: null,
+        height: 720,
+        isOriginal: false,
+      },
+    ],
+  },
+  presets: [
     {
-      id: "format-720",
+      id: "video-720p",
+      kind: "video" as const,
+      label: "Vídeo 720p",
       container: "mp4",
-      width: 1280,
+      width: null,
       height: 720,
-      qualityLabel: "720p",
-      isOriginal: true,
+      isOriginal: false,
+      sourceFormatId: "format-720",
+      targetContainer: "mp4",
+      targetHeight: 720,
+      targetWidth: null,
+      targetAudioOnly: false,
     },
   ],
 };
 
 describe("CreateDownloadService", () => {
   let downloadRepository: InMemoryDownloadRepository;
-  const analyzeMediaService = { execute: vi.fn() };
+  const analyzeMediaService = { executeWithCatalog: vi.fn() };
   const encryptSourceUrl = vi.fn();
   const urlValidator = new ValidateMediaUrlService();
   let service: CreateDownloadService;
@@ -30,7 +49,7 @@ describe("CreateDownloadService", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     downloadRepository = new InMemoryDownloadRepository();
-    analyzeMediaService.execute.mockResolvedValue(analysis);
+    analyzeMediaService.executeWithCatalog.mockResolvedValue(analysis);
     encryptSourceUrl.mockReturnValue({
       ciphertext: "ciphertext",
       iv: "iv",
@@ -40,16 +59,14 @@ describe("CreateDownloadService", () => {
     service = new CreateDownloadService({ downloadRepository, urlValidator, analyzeMediaService, encryptSourceUrl });
   });
 
-  it("revalidates the option and persists only the encrypted source URL", async () => {
+  it("revalidates the preset and persists only its internal selection and encrypted source URL", async () => {
     const result = await service.execute({
       userId: "owner-1",
       sourceUrl: "https://www.youtube.com/watch?v=example",
-      formatId: "format-720",
-      targetContainer: "mp4",
-      targetHeight: 720,
+      presetId: "video-720p",
     });
 
-    expect(analyzeMediaService.execute).toHaveBeenCalledWith("https://www.youtube.com/watch?v=example");
+    expect(analyzeMediaService.executeWithCatalog).toHaveBeenCalledWith("https://www.youtube.com/watch?v=example");
     expect(encryptSourceUrl).toHaveBeenCalledWith("https://www.youtube.com/watch?v=example");
     expect(result.status).toBe("QUEUED");
     expect(downloadRepository.downloads).toHaveLength(1);
@@ -60,23 +77,39 @@ describe("CreateDownloadService", () => {
       sourceUrlIv: "iv",
       sourceUrlTag: "tag",
       sourceUrlKeyVersion: "v1",
+      selectedPresetId: "video-720p",
       selectedFormatId: "format-720",
       targetContainer: "mp4",
       targetHeight: 720,
+      targetWidth: null,
+      targetAudioOnly: false,
       status: "QUEUED",
     });
     expect(downloadRepository.downloads[0]).not.toHaveProperty("sourceUrl");
   });
 
-  it.each([
-    { formatId: "not-offered", targetContainer: "mp4", targetHeight: 720 },
-    { formatId: "format-720", targetContainer: "webm", targetHeight: 720 },
-    { formatId: "format-720", targetContainer: "mp4", targetHeight: 1080 },
-  ])("rejects unavailable or mismatched format choices", async (selection) => {
+  it.each([{ presetId: "not-offered" }])("rejects a preset absent from fresh analysis", async (selection) => {
     await expect(
       service.execute({ userId: "owner-1", sourceUrl: "https://www.youtube.com/watch?v=example", ...selection }),
     ).rejects.toMatchObject({ code: "FORMAT_NOT_AVAILABLE", statusCode: 422 });
     expect(downloadRepository.downloads).toHaveLength(0);
+  });
+
+  it("re-resolves a legacy history selection only when source and conversion still match", async () => {
+    const result = await service.execute({
+      userId: "owner-1",
+      sourceUrl: "https://www.youtube.com/watch?v=example",
+      legacyFormatId: "format-720",
+      legacyTargetContainer: "mp4",
+      legacyTargetHeight: 720,
+    });
+
+    expect(result).toMatchObject({
+      selectedPresetId: "video-720p",
+      selectedFormatId: "format-720",
+      targetContainer: "mp4",
+      targetHeight: 720,
+    });
   });
 
   it("maps repository failures to a safe creation error", async () => {
@@ -95,7 +128,7 @@ describe("CreateDownloadService", () => {
       await failingService.execute({
         userId: "owner-1",
         sourceUrl: "https://www.youtube.com/watch?v=example",
-        formatId: "format-720",
+        presetId: "video-720p",
       });
     } catch (error) {
       caughtError = error;

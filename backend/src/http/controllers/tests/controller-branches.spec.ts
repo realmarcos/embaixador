@@ -68,8 +68,11 @@ const download: Download = {
   sourceUrlKeyVersion: "v1",
   title: "Safe title",
   selectedFormatId: "format-1",
+  selectedPresetId: null,
   targetContainer: null,
   targetHeight: null,
+  targetWidth: null,
+  targetAudioOnly: false,
   status: "READY",
   storageObjectKey: "private-object-key",
   fileName: "video.mp4",
@@ -163,7 +166,7 @@ describe("download controller branches", () => {
     createDownloadService.execute.mockRejectedValueOnce(new Error("database secret"));
     const failed = await invoke(
       controller.create,
-      createRequest({ body: { url: "https://youtube.com/video", formatId: "format-1" } }),
+      createRequest({ body: { url: "https://youtube.com/video", presetId: "video-720p" } }),
       createResponse("owner-1"),
     );
     expect(failed).toHaveBeenCalledWith(expect.any(Error));
@@ -171,7 +174,7 @@ describe("download controller branches", () => {
     const response = createResponse("owner-1");
     await invoke(
       controller.create,
-      createRequest({ body: { url: "https://youtube.com/video", formatId: "format-1" } }),
+      createRequest({ body: { url: "https://youtube.com/video", presetId: "video-720p" } }),
       response,
     );
     expect(response.statusCode).toBe(202);

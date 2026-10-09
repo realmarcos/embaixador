@@ -26,9 +26,9 @@ The backend and frontend packages, toolchain, and media executables are already 
 
 **Purpose**: Define the shared API and persistence shape required by the media-format user story.
 
-- [ ] T001 [P] Update `specs/002-formatos-padrao-download/contracts/media-format-presets.openapi.yaml` with the `MediaPreset` response fields and `presetId` request field; retain `id` maximum length 64, dimension range 1-8640, and distinguish original, audio, and video kinds.
-- [ ] T002 [P] Add `selectedPresetId`, nullable `targetWidth`, and `targetAudioOnly` to `backend/prisma/schema.prisma`; preserve existing rows through an additive migration in `backend/prisma/migrations/` and constrain preset IDs to the contract maximum length 64 and target dimensions to the existing 1-8640 range.
-- [ ] T003 Extend `backend/src/repositories/downloads/types.ts` and `backend/src/repositories/implementations/prisma/downloads/index.ts` to create and return the selected preset identity, target width, and audio-only intent while preserving the existing encrypted-source fields.
+- [X] T001 [P] Update `specs/002-formatos-padrao-download/contracts/media-format-presets.openapi.yaml` with the `MediaPreset` response fields and `presetId` request field; retain `id` maximum length 64, dimension range 1-8640, and distinguish original, audio, and video kinds.
+- [X] T002 [P] Add `selectedPresetId`, nullable `targetWidth`, and `targetAudioOnly` to `backend/prisma/schema.prisma`; preserve existing rows through an additive migration in `backend/prisma/migrations/` and constrain preset IDs to the contract maximum length 64 and target dimensions to the existing 1-8640 range.
+- [X] T003 Extend `backend/src/repositories/downloads/types.ts` and `backend/src/repositories/implementations/prisma/downloads/index.ts` to create and return the selected preset identity, target width, and audio-only intent while preserving the existing encrypted-source fields.
 
 **Checkpoint**: Contract and persistence can represent all new output selections without changing existing source URL confidentiality boundaries.
 
@@ -42,25 +42,25 @@ The backend and frontend packages, toolchain, and media executables are already 
 
 ### Tests for User Story 1
 
-- [ ] T004 [P] [US1] Add yt-dlp mapping tests for audio/video codec metadata, missing codec values, and unknown capabilities in `backend/src/providers/implementations/yt-dlp/tests/yt-dlp-media-extractor.spec.ts`.
-- [ ] T005 [P] [US1] Add catalog tests for the standard resolution set, 720p and lower source limits, no upscaling, DCI 2048×1080 padding eligibility, audio-only eligibility, unsupported metadata, and duplicate provider formats in `backend/src/services/downloads/tests/media-format-catalog.spec.ts`.
-- [ ] T006 [P] [US1] Add fresh-analysis preset selection, stale/unknown preset rejection, and persistence assertions in `backend/src/services/downloads/tests/create-download-service.spec.ts`.
-- [ ] T007 [P] [US1] Add conversion tests for MP3 and audio MP4 without video streams, audio MIME types, proportional downscale, exact DCI fit-and-pad output, no source-pixel upscaling, and conversion bypass for original in `backend/src/providers/implementations/ffmpeg/tests/ffmpeg-media-converter.spec.ts` and `backend/src/services/downloads/tests/process-download-job-service.spec.ts`.
-- [ ] T008 [P] [US1] Add repository adapter assertions for `selectedPresetId`, `targetWidth`, and `targetAudioOnly` persistence in `backend/src/repositories/implementations/prisma/tests/prisma-adapters.spec.ts` and `backend/src/repositories/implementations/prisma/tests/repositories.integration.spec.ts`.
-- [ ] T009 [P] [US1] Update API client tests to assert download creation sends `presetId` and parses preset response fields in `frontend/lib/api-client.test.ts`.
+- [X] T004 [P] [US1] Add yt-dlp mapping tests for audio/video codec metadata, missing codec values, and unknown capabilities in `backend/src/providers/implementations/yt-dlp/tests/yt-dlp-media-extractor.spec.ts`.
+- [X] T005 [P] [US1] Add catalog tests for the standard resolution set, 720p and lower source limits, no upscaling, DCI 2048×1080 padding eligibility, audio-only eligibility, unsupported metadata, and duplicate provider formats in `backend/src/services/downloads/tests/media-format-catalog.spec.ts`.
+- [X] T006 [P] [US1] Add fresh-analysis preset selection, stale/unknown preset rejection, and persistence assertions in `backend/src/services/downloads/tests/create-download-service.spec.ts`.
+- [X] T007 [P] [US1] Add conversion tests for MP3 and audio MP4 without video streams, audio MIME types, proportional downscale, exact DCI fit-and-pad output, no source-pixel upscaling, and conversion bypass for original in `backend/src/providers/implementations/ffmpeg/tests/ffmpeg-media-converter.spec.ts` and `backend/src/services/downloads/tests/process-download-job-service.spec.ts`.
+- [X] T008 [P] [US1] Add repository adapter assertions for `selectedPresetId`, `targetWidth`, and `targetAudioOnly` persistence in `backend/src/repositories/implementations/prisma/tests/prisma-adapters.spec.ts` and `backend/src/repositories/implementations/prisma/tests/repositories.integration.spec.ts`.
+- [X] T009 [P] [US1] Update API client tests to assert download creation sends `presetId` and parses preset response fields in `frontend/lib/api-client.test.ts`.
 
 ### Implementation for User Story 1
 
-- [ ] T010 [US1] Extend internal media capability types and map yt-dlp `acodec`/`vcodec` in `backend/src/providers/media-extractor/types.ts` and `backend/src/providers/implementations/yt-dlp/yt-dlp-media-extractor.ts` without exposing raw codec diagnostics in public responses.
-- [ ] T011 [US1] Implement stable preset derivation and integrate it into analysis so audio MP3/MP4, MP4 video at 240p/360p/480p/720p/1080p/1440p/DCI 2K/4K, and original appear only when supported in `backend/src/services/downloads/media-format-catalog.ts` and `backend/src/services/downloads/analyze-media-service.ts`.
-- [ ] T012 [US1] Resolve submitted `presetId` against a fresh analysis, reject unavailable selections with the existing safe `FORMAT_NOT_AVAILABLE` error, and persist its internal source selector and output settings in `backend/src/services/downloads/create-download-service.ts`.
-- [ ] T013 [P] [US1] Extend `MediaConversionInput` and `FfmpegMediaConverter` to support nullable target width/height and audio-only output; emit MP3/MP4 audio with no video stream, preserve proportional scaling, and fit/pad DCI output to exactly 2048×1080 with centered black bars in `backend/src/providers/media-converter/index.ts` and `backend/src/providers/implementations/ffmpeg/ffmpeg-media-converter.ts`.
-- [ ] T014 [US1] Pass persisted output settings into conversion and bypass FFmpeg for original selections in `backend/src/services/downloads/process-download-job-service.ts`; ensure completed MP4 audio uses `audio/mp4` and video MP4 uses `video/mp4` in `backend/src/providers/implementations/ffmpeg/ffmpeg-media-converter.ts`.
-- [ ] T015 [US1] Change the create-download HTTP request to accept `presetId`, include the selected preset identity in the owned download response, and preserve safe validation/error behavior in `backend/src/http/controllers/download-controller.ts` and `backend/src/http/tests/media-download.routes.spec.ts`.
-- [ ] T016 [US1] Replace raw `MediaOption` client shapes with the public `MediaPreset` type and send `presetId` in `frontend/lib/api-client.ts`.
-- [ ] T017 [US1] Render the returned preset label, media kind, container, and resolution without exposing provider format IDs in `frontend/components/media/media-options.tsx`.
-- [ ] T018 [US1] Wire the selected preset through analysis, default selection, and download submission in `frontend/app/(protected)/page.tsx`.
-- [ ] T019 [US1] Show the selected preset/output identity in the completed download status and history presentation in `frontend/components/media/download-status.tsx` and `frontend/lib/api-client.ts`.
+- [X] T010 [US1] Extend internal media capability types and map yt-dlp `acodec`/`vcodec` in `backend/src/providers/media-extractor/types.ts` and `backend/src/providers/implementations/yt-dlp/yt-dlp-media-extractor.ts` without exposing raw codec diagnostics in public responses.
+- [X] T011 [US1] Implement stable preset derivation and integrate it into analysis so audio MP3/MP4, MP4 video at 240p/360p/480p/720p/1080p/1440p/DCI 2K/4K, and original appear only when supported in `backend/src/services/downloads/media-format-catalog.ts` and `backend/src/services/downloads/analyze-media-service.ts`.
+- [X] T012 [US1] Resolve submitted `presetId` against a fresh analysis, reject unavailable selections with the existing safe `FORMAT_NOT_AVAILABLE` error, and persist its internal source selector and output settings in `backend/src/services/downloads/create-download-service.ts`.
+- [X] T013 [P] [US1] Extend `MediaConversionInput` and `FfmpegMediaConverter` to support nullable target width/height and audio-only output; emit MP3/MP4 audio with no video stream, preserve proportional scaling, and fit/pad DCI output to exactly 2048×1080 with centered black bars in `backend/src/providers/media-converter/index.ts` and `backend/src/providers/implementations/ffmpeg/ffmpeg-media-converter.ts`.
+- [X] T014 [US1] Pass persisted output settings into conversion and bypass FFmpeg for original selections in `backend/src/services/downloads/process-download-job-service.ts`; ensure completed MP4 audio uses `audio/mp4` and video MP4 uses `video/mp4` in `backend/src/providers/implementations/ffmpeg/ffmpeg-media-converter.ts`.
+- [X] T015 [US1] Change the create-download HTTP request to accept `presetId`, include the selected preset identity in the owned download response, and preserve safe validation/error behavior in `backend/src/http/controllers/download-controller.ts` and `backend/src/http/tests/media-download.routes.spec.ts`.
+- [X] T016 [US1] Replace raw `MediaOption` client shapes with the public `MediaPreset` type and send `presetId` in `frontend/lib/api-client.ts`.
+- [X] T017 [US1] Render the returned preset label, media kind, container, and resolution without exposing provider format IDs in `frontend/components/media/media-options.tsx`.
+- [X] T018 [US1] Wire the selected preset through analysis, default selection, and download submission in `frontend/app/(protected)/page.tsx`.
+- [X] T019 [US1] Show the selected preset/output identity in the completed download status and history presentation in `frontend/components/media/download-status.tsx` and `frontend/lib/api-client.ts`.
 
 **Checkpoint**: User Story 1 is independently usable from analysis through completed output and matching history metadata.
 
@@ -70,8 +70,8 @@ The backend and frontend packages, toolchain, and media executables are already 
 
 **Purpose**: Verify cross-package compatibility and document the runnable acceptance scenarios.
 
-- [ ] T020 [P] Update `specs/002-formatos-padrao-download/quickstart.md` to match the final preset contract, media fixtures/scenarios, migration prerequisites, and safe handling of private test URLs and provider diagnostics.
-- [ ] T021 Run backend tests, lint, build, Prisma migration checks, and frontend tests/lint/build using `backend/package.json`, `frontend/package.json`, and `specs/002-formatos-padrao-download/contracts/media-format-presets.openapi.yaml`; record any unavailable encoder or migration prerequisite without weakening preset eligibility.
+- [X] T020 [P] Align `specs/002-formatos-padrao-download/plan.md`, `data-model.md`, `contracts/media-format-presets.openapi.yaml`, and `quickstart.md` with source-dimension eligibility, nullable legacy `selectedPresetId`, history responses, migration prerequisites, and safe handling of private test URLs and provider diagnostics.
+- [X] T021 Run backend tests, lint, build, Prisma migration checks, and frontend tests/lint/build using `backend/package.json`, `frontend/package.json`, and `specs/002-formatos-padrao-download/contracts/media-format-presets.openapi.yaml`; record any unavailable encoder or migration prerequisite without weakening preset eligibility.
 
 ---
 
@@ -133,3 +133,4 @@ After the tests are in place:
 - `[P]` marks independent file work only; story-specific tasks all carry `[US1]`.
 - Backend tests are included to meet the project constitution; no new test or runtime dependency is proposed.
 - Existing migration compatibility and media confidentiality must be preserved.
+- Prisma migration status was attempted, but MySQL at `localhost:3307` was unreachable (`P1001`); no migration was applied and database state remains unverified.

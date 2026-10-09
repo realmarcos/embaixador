@@ -1,7 +1,8 @@
 import { AppError } from "../../errors/app-errors";
-import { MediaAnalysis, MediaOption } from "../../providers/media-extractor/types";
+import { MediaAnalysis, MediaOption, MediaPreset, MediaPresetAnalysis } from "../../providers/media-extractor/types";
 import { MediaExtractorProvider } from "../../providers/media-extractor";
 import { ValidatedMediaUrl, ValidateMediaUrlService } from "./validate-media-url-service";
+import { buildMediaFormatCatalog, ResolvedMediaPreset } from "./media-format-catalog";
 
 interface AnalyzeMediaServiceDependencies {
   urlValidator: Pick<ValidateMediaUrlService, "execute">;
@@ -33,6 +34,8 @@ function toPublicOption(option: MediaOption): MediaOption | undefined {
     height: option.height,
     qualityLabel: option.qualityLabel,
     isOriginal: option.isOriginal,
+    hasAudio: option.hasAudio === true,
+    hasVideo: option.hasVideo === true,
   };
 }
 
@@ -62,23 +65,46 @@ function analysisFailed(): AppError {
   });
 }
 
-function mapAnalysis(validated: ValidatedMediaUrl, analysis: MediaAnalysis): MediaAnalysis {
+interface AnalyzedMediaWithCatalog {
+  analysis: MediaPresetAnalysis;
+  presets: ResolvedMediaPreset[];
+}
+
+function toPublicPreset(preset: ResolvedMediaPreset): MediaPreset {
+  return {
+    id: preset.id,
+    kind: preset.kind,
+    label: preset.label,
+    container: preset.container,
+    width: preset.width,
+    height: preset.height,
+    isOriginal: preset.isOriginal,
+  };
+}
+
+function mapAnalysis(validated: ValidatedMediaUrl, analysis: MediaAnalysis): AnalyzedMediaWithCatalog {
   if (analysis.platform !== validated.platform || !Array.isArray(analysis.options)) {
     throw analysisFailed();
   }
 
+  const options = analysis.options.map(toPublicOption).filter((option) => option !== undefined);
+  const presets = buildMediaFormatCatalog(options);
+
   return {
-    platform: validated.platform,
-    title: safeTitle(analysis.title),
-    thumbnailUrl: null,
-    options: analysis.options.map(toPublicOption).filter((option) => option !== undefined),
+    analysis: {
+      platform: validated.platform,
+      title: safeTitle(analysis.title),
+      thumbnailUrl: null,
+      options: presets.map(toPublicPreset),
+    },
+    presets,
   };
 }
 
 class AnalyzeMediaService {
   constructor(private readonly dependencies: AnalyzeMediaServiceDependencies) {}
 
-  async execute(input: string): Promise<MediaAnalysis> {
+  async executeWithCatalog(input: string): Promise<AnalyzedMediaWithCatalog> {
     const validated = await this.dependencies.urlValidator.execute(input);
     let analysis: MediaAnalysis;
 
@@ -89,6 +115,10 @@ class AnalyzeMediaService {
     }
 
     return mapAnalysis(validated, analysis);
+  }
+
+  async execute(input: string): Promise<MediaPresetAnalysis> {
+    return (await this.executeWithCatalog(input)).analysis;
   }
 }
 

@@ -13,8 +13,11 @@ const record: Download = {
   sourceUrlKeyVersion: "v1",
   title: "Test media",
   selectedFormatId: "format-1",
+  selectedPresetId: "video-720p",
   targetContainer: null,
   targetHeight: null,
+  targetWidth: null,
+  targetAudioOnly: false,
   status: "READY",
   storageObjectKey: "private-object-key",
   fileName: "media.mp4",
@@ -91,7 +94,7 @@ describe("history controller", () => {
     expect(listHistoryService.execute).toHaveBeenCalledWith({ userId: "owner-1", cursor: undefined, limit: undefined });
     expect(context.responseState.statusCode).toBe(200);
     const body = context.responseState.body as { items: Record<string, unknown>[]; nextCursor: string | null };
-    expect(body.items[0]).toMatchObject({ id: "download-1", sizeBytes: 2048 });
+    expect(body.items[0]).toMatchObject({ id: "download-1", sizeBytes: 2048, selectedPresetId: "video-720p" });
     expect(body.items[0]).not.toHaveProperty("userId");
     expect(body.items[0]).not.toHaveProperty("sourceUrlCiphertext");
     expect(body.items[0]).not.toHaveProperty("storageObjectKey");

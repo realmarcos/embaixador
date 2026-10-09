@@ -84,9 +84,12 @@ class FfmpegMediaConverter implements MediaConverterProvider {
       });
     }
 
+    const targetWidth = input.targetWidth ?? null;
+    const targetHeight = input.targetHeight;
     if (
-      input.targetHeight !== null &&
-      (!Number.isInteger(input.targetHeight) || input.targetHeight < 1 || input.targetHeight > 8640)
+      (targetWidth !== null && (!Number.isInteger(targetWidth) || targetWidth < 1 || targetWidth > 8640)) ||
+      (targetHeight !== null && (!Number.isInteger(targetHeight) || targetHeight < 1 || targetHeight > 8640)) ||
+      (targetWidth !== null && targetHeight === null)
     ) {
       throw new AppError({
         message: "The selected output dimension is invalid",
@@ -113,8 +116,17 @@ class FfmpegMediaConverter implements MediaConverterProvider {
     const outputFileName = `${randomUUID()}.${targetContainer}`;
     const outputPath = resolve(outputDirectory, outputFileName);
     const args = ["-nostdin", "-v", "error", "-y", "-i", inputPath];
-    if (input.targetHeight !== null) {
-      args.push("-vf", `scale=-2:${input.targetHeight}`);
+    if (input.targetAudioOnly === true) {
+      args.push("-vn");
+    }
+    if (targetWidth !== null && targetHeight !== null) {
+      const fitFilter = [
+        `scale=${targetWidth}:${targetHeight}:force_original_aspect_ratio=decrease:force_divisible_by=2`,
+        `pad=${targetWidth}:${targetHeight}:(ow-iw)/2:(oh-ih)/2:black`,
+      ].join(",");
+      args.push("-vf", fitFilter);
+    } else if (targetHeight !== null) {
+      args.push("-vf", `scale=-2:${targetHeight}`);
     }
     args.push("-map_metadata", "-1", "-map_chapters", "-1", outputPath);
 
@@ -135,7 +147,9 @@ class FfmpegMediaConverter implements MediaConverterProvider {
       return {
         filePath: outputPath,
         fileName: `${basename(input.fileName, extname(input.fileName))}.${targetContainer}`,
-        mimeType: mediaTypeFor(targetContainer),
+        mimeType: input.targetAudioOnly === true && targetContainer === "mp4"
+          ? "audio/mp4"
+          : mediaTypeFor(targetContainer),
         sizeBytes: output.size,
       };
     } catch {

@@ -13,8 +13,11 @@ const processingDownload: Download = {
   sourceUrlKeyVersion: "v1",
   title: "Safe title",
   selectedFormatId: "format-720",
+  selectedPresetId: null,
   targetContainer: "mp4",
   targetHeight: 720,
+  targetWidth: null,
+  targetAudioOnly: false,
   status: "PROCESSING",
   storageObjectKey: null,
   fileName: null,
@@ -93,6 +96,10 @@ describe("ProcessDownloadJobService", () => {
       outputDirectory: "/tmp/job-download-1",
     });
     expect(mediaConverter.convert).toHaveBeenCalledOnce();
+    expect(mediaConverter.convert).toHaveBeenCalledWith(expect.objectContaining({
+      targetWidth: null,
+      targetAudioOnly: false,
+    }));
     expect(mediaStorage.putObject).toHaveBeenCalledWith({
       objectKey: "owner-1/random-object-key",
       filePath: downloadedMedia.filePath,
@@ -128,6 +135,25 @@ describe("ProcessDownloadJobService", () => {
     expect(mediaStorage.putObject).not.toHaveBeenCalled();
     expect(JSON.stringify(result)).not.toContain("private metadata");
     expect(removeTemporaryDirectory).toHaveBeenCalledWith("/tmp/job-download-1");
+  });
+
+  it("bypasses conversion for the original preset", async () => {
+    const originalDownload = {
+      ...processingDownload,
+      selectedPresetId: "original",
+      targetContainer: null,
+      targetHeight: null,
+      targetWidth: null,
+      targetAudioOnly: false,
+    };
+
+    await service.execute(originalDownload);
+
+    expect(mediaConverter.convert).not.toHaveBeenCalled();
+    expect(mediaStorage.putObject).toHaveBeenCalledWith(expect.objectContaining({
+      filePath: downloadedMedia.filePath,
+      mimeType: downloadedMedia.mimeType,
+    }));
   });
 
   it("marks storage failures safely without publishing an object key", async () => {

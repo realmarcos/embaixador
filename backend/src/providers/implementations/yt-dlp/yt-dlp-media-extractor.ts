@@ -41,6 +41,8 @@ interface YtDlpFormat {
   height?: unknown;
   format_note?: unknown;
   resolution?: unknown;
+  acodec?: unknown;
+  vcodec?: unknown;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -140,6 +142,10 @@ function safeDimension(value: unknown): number | null {
     : null;
 }
 
+function hasCodec(value: unknown): boolean {
+  return typeof value === "string" && value.trim().length > 0 && !["none", "unknown"].includes(value.trim().toLowerCase());
+}
+
 function toMediaOption(value: unknown): MediaOption | undefined {
   if (!isRecord(value)) {
     return undefined;
@@ -159,6 +165,8 @@ function toMediaOption(value: unknown): MediaOption | undefined {
     height: safeDimension(format.height),
     qualityLabel: safeText(format.format_note, 80) ?? safeText(format.resolution, 80),
     isOriginal: true,
+    hasAudio: hasCodec(format.acodec),
+    hasVideo: hasCodec(format.vcodec),
   };
 }
 

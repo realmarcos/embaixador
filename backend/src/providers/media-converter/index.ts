@@ -6,6 +6,8 @@ interface MediaConversionInput {
   mimeType: string;
   targetContainer: string;
   targetHeight: number | null;
+  targetWidth?: number | null;
+  targetAudioOnly?: boolean;
   outputDirectory: string;
 }
 

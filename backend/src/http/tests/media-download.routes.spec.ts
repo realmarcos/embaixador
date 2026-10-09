@@ -12,13 +12,14 @@ async function readJson<T>(response: Response): Promise<T> {
   return body as T;
 }
 
-const mediaOption = {
-  id: "format-720",
+const mediaPreset = {
+  id: "video-720p",
+  kind: "video",
+  label: "Vídeo 720p",
   container: "mp4",
-  width: 1280,
+  width: null,
   height: 720,
-  qualityLabel: "720p",
-  isOriginal: true,
+  isOriginal: false,
 };
 
 const readyDownload = {
@@ -31,8 +32,11 @@ const readyDownload = {
   sourceUrlKeyVersion: "v1",
   title: "Safe title",
   selectedFormatId: "format-720",
-  targetContainer: null,
-  targetHeight: null,
+  selectedPresetId: "video-720p",
+  targetContainer: "mp4",
+  targetHeight: 720,
+  targetWidth: null,
+  targetAudioOnly: false,
   status: "READY",
   storageObjectKey: "owner-1/random-key",
   fileName: "video.mp4",
@@ -58,7 +62,7 @@ describe("media and download HTTP contract", () => {
 
   beforeEach(async () => {
     vi.clearAllMocks();
-    analyzeMediaService.execute.mockResolvedValue({ platform: "YOUTUBE", title: "Safe title", options: [mediaOption] });
+    analyzeMediaService.execute.mockResolvedValue({ platform: "YOUTUBE", title: "Safe title", options: [mediaPreset] });
     createDownloadService.execute.mockResolvedValue(readyDownload);
     findDownloadService.execute.mockResolvedValue(readyDownload);
     mediaStorage.getObjectStream.mockResolvedValue(Readable.from(Buffer.from("private-media-content")));
@@ -116,22 +120,23 @@ describe("media and download HTTP contract", () => {
       body: JSON.stringify({ url: "https://www.youtube.com/watch?v=example" }),
     });
     expect(analysisResponse.status).toBe(200);
-    await expect(readJson<{ options: typeof mediaOption[] }>(analysisResponse)).resolves.toMatchObject({ options: [mediaOption] });
+    await expect(readJson<{ options: typeof mediaPreset[] }>(analysisResponse)).resolves.toMatchObject({ options: [mediaPreset] });
 
     const downloadResponse = await fetch(`${baseUrl}/downloads`, {
       method: "POST",
       headers: { "content-type": "application/json", cookie: "embaixador_session=owner-token" },
-      body: JSON.stringify({ url: "https://www.youtube.com/watch?v=example", formatId: "format-720" }),
+      body: JSON.stringify({ url: "https://www.youtube.com/watch?v=example", presetId: "video-720p" }),
     });
     expect(downloadResponse.status).toBe(202);
     expect(createDownloadService.execute).toHaveBeenCalledWith(
-      expect.objectContaining({ userId: "owner-1", formatId: "format-720" }),
+      expect.objectContaining({ userId: "owner-1", presetId: "video-720p" }),
     );
     const queuedDownload = await readJson<Record<string, unknown>>(downloadResponse);
     expect(queuedDownload).not.toHaveProperty("sourceUrlCiphertext");
     expect(queuedDownload).not.toHaveProperty("sourceUrlIv");
     expect(queuedDownload).not.toHaveProperty("sourceUrlTag");
     expect(queuedDownload).not.toHaveProperty("userId");
+    expect(queuedDownload.selectedPresetId).toBe("video-720p");
   });
 
   it("scopes status lookup to the authenticated owner", async () => {

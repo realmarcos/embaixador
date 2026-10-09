@@ -19,8 +19,11 @@ interface Download {
   sourceUrlKeyVersion: string;
   title: string | null;
   selectedFormatId: string;
+  selectedPresetId: string | null;
   targetContainer: string | null;
   targetHeight: number | null;
+  targetWidth: number | null;
+  targetAudioOnly: boolean;
   status: DownloadStatus;
   storageObjectKey: string | null;
   fileName: string | null;
@@ -43,8 +46,11 @@ interface CreateDownloadInput {
   sourceUrlTag: string;
   sourceUrlKeyVersion: string;
   selectedFormatId: string;
-  targetContainer?: string;
-  targetHeight?: number;
+  selectedPresetId?: string;
+  targetContainer?: string | null;
+  targetHeight?: number | null;
+  targetWidth?: number | null;
+  targetAudioOnly?: boolean;
   replayOfId?: string;
 }
 

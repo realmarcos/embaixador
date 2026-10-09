@@ -83,6 +83,68 @@ describe("FfmpegMediaConverter", () => {
     expect(capturedOptions?.timeoutMs).toBeGreaterThan(0);
   });
 
+  it.each([
+    { targetContainer: "mp3", mimeType: "audio/mpeg" },
+    { targetContainer: "mp4", mimeType: "audio/mp4" },
+  ])("creates audio-only $targetContainer output without a video stream", async ({ targetContainer, mimeType }) => {
+    const directory = await mkdtemp(join(tmpdir(), "embaixador-ffmpeg-audio-test-"));
+    temporaryDirectories.push(directory);
+    const inputPath = join(directory, "source.mp4");
+    await writeFile(inputPath, "source-media-bytes");
+    let capturedArgs: string[] = [];
+    const run = vi.fn<Runner>().mockImplementation((_executable, args) => {
+      capturedArgs = args;
+      const outputPath = args[args.length - 1];
+      if (!outputPath) return Promise.reject(new Error("missing output"));
+      return writeFile(outputPath, "audio-output").then(() => undefined);
+    });
+    const converter = new FfmpegMediaConverter({ executablePath: "/usr/bin/ffmpeg", run });
+
+    const result = await converter.convert({
+      filePath: inputPath,
+      fileName: "source.mp4",
+      mimeType: "video/mp4",
+      targetContainer,
+      targetHeight: null,
+      targetWidth: null,
+      targetAudioOnly: true,
+      outputDirectory: directory,
+    });
+
+    expect(capturedArgs).toContain("-vn");
+    expect(result.mimeType).toBe(mimeType);
+  });
+
+  it("fits and pads DCI 2K to an exact 2048x1080 frame", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "embaixador-ffmpeg-dci-test-"));
+    temporaryDirectories.push(directory);
+    const inputPath = join(directory, "source.mp4");
+    await writeFile(inputPath, "source-media-bytes");
+    let capturedArgs: string[] = [];
+    const run = vi.fn<Runner>().mockImplementation((_executable, args) => {
+      capturedArgs = args;
+      const outputPath = args[args.length - 1];
+      if (!outputPath) return Promise.reject(new Error("missing output"));
+      return writeFile(outputPath, "padded-video").then(() => undefined);
+    });
+    const converter = new FfmpegMediaConverter({ executablePath: "/usr/bin/ffmpeg", run });
+
+    await converter.convert({
+      filePath: inputPath,
+      fileName: "source.mp4",
+      mimeType: "video/mp4",
+      targetContainer: "mp4",
+      targetHeight: 1080,
+      targetWidth: 2048,
+      targetAudioOnly: false,
+      outputDirectory: directory,
+    });
+
+    const filterIndex = capturedArgs.indexOf("-vf");
+    expect(capturedArgs[filterIndex + 1]).toContain("force_original_aspect_ratio=decrease");
+    expect(capturedArgs[filterIndex + 1]).toContain("pad=2048:1080");
+  });
+
   it("rejects unsupported containers and invalid dimensions before spawning FFmpeg", async () => {
     const run = vi.fn<Runner>().mockResolvedValue(undefined);
     const converter = new FfmpegMediaConverter({ executablePath: "/usr/bin/ffmpeg", run });
@@ -104,6 +166,20 @@ describe("FfmpegMediaConverter", () => {
         mimeType: "video/webm",
         targetContainer: "mp4",
         targetHeight: 10000,
+        targetWidth: null,
+        targetAudioOnly: false,
+        outputDirectory: "/tmp/job",
+      }),
+    ).rejects.toMatchObject({ code: "INVALID_OUTPUT_DIMENSION", statusCode: 400 });
+    await expect(
+      converter.convert({
+        filePath: "/tmp/job/source.webm",
+        fileName: "source.webm",
+        mimeType: "video/webm",
+        targetContainer: "mp4",
+        targetHeight: 1080,
+        targetWidth: 9000,
+        targetAudioOnly: false,
         outputDirectory: "/tmp/job",
       }),
     ).rejects.toMatchObject({ code: "INVALID_OUTPUT_DIMENSION", statusCode: 400 });

@@ -21,6 +21,7 @@ function toPublicDownload(download: Download) {
     platform: download.platform,
     title: download.title,
     status: download.status,
+    selectedPresetId: download.selectedPresetId,
     fileName: download.fileName,
     mimeType: download.mimeType,
     sizeBytes: download.sizeBytes === null ? null : Number(download.sizeBytes),
@@ -60,9 +61,9 @@ function createDownloadController({
 
     if (
       typeof body?.url !== "string" ||
-      typeof body.formatId !== "string" ||
-      (body.targetContainer !== undefined && typeof body.targetContainer !== "string") ||
-      (body.targetHeight !== undefined && typeof body.targetHeight !== "number")
+      typeof body.presetId !== "string" ||
+      body.presetId.length < 1 ||
+      body.presetId.length > 64
     ) {
       next(new AppError({ message: "Invalid download request", code: "INVALID_REQUEST", statusCode: 400 }));
       return;
@@ -72,9 +73,7 @@ function createDownloadController({
       const download = await createDownloadService.execute({
         userId,
         sourceUrl: body.url,
-        formatId: body.formatId,
-        targetContainer: body.targetContainer,
-        targetHeight: body.targetHeight,
+        presetId: body.presetId,
       });
       response.status(202).json(toPublicDownload(download));
     } catch (error) {
