@@ -1,0 +1,104 @@
+openapi: 3.1.0
+info:
+  title: Media Format Presets API
+  version: 1.0.0
+  description: API contract delta for capability-filtered media presets.
+paths:
+  /media/analysis:
+    post:
+      operationId: analyzeMedia
+      summary: Analyze a media URL and return supported standard presets
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url]
+              properties:
+                url:
+                  type: string
+                  format: uri
+                  maxLength: 2048
+      responses:
+        '200':
+          description: Analysis and capability-filtered output presets.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [platform, title, options]
+                properties:
+                  platform:
+                    type: string
+                    enum: [YOUTUBE, INSTAGRAM, FACEBOOK]
+                  title:
+                    type: [string, 'null']
+                  options:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/MediaPreset'
+        '400':
+          description: Invalid media URL or request.
+        '422':
+          description: Unsupported platform or media with no supported preset.
+  /downloads:
+    post:
+      operationId: createDownload
+      summary: Queue a download using a preset from a fresh analysis
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url, presetId]
+              properties:
+                url:
+                  type: string
+                  format: uri
+                  maxLength: 2048
+                presetId:
+                  type: string
+                  maxLength: 64
+                  description: Stable ID returned for this standard output preset.
+      responses:
+        '202':
+          description: Job accepted; its record includes the selected preset identity.
+        '400':
+          description: Invalid request.
+        '401':
+          description: Authentication required.
+        '422':
+          description: Preset is unavailable for the current media analysis.
+components:
+  schemas:
+    MediaPreset:
+      type: object
+      required: [id, kind, label, container, isOriginal]
+      properties:
+        id:
+          type: string
+          maxLength: 64
+          examples: [original, audio-mp3, audio-mp4, video-720p, video-2k-dci]
+        kind:
+          type: string
+          enum: [original, audio, video]
+        label:
+          type: string
+          maxLength: 80
+        container:
+          type: string
+          maxLength: 16
+          pattern: '^[a-z0-9]{1,16}$'
+          description: Output container for a converted preset, or source container for original.
+        width:
+          type: [integer, 'null']
+          minimum: 1
+          maximum: 8640
+        height:
+          type: [integer, 'null']
+          minimum: 1
+          maximum: 8640
+        isOriginal:
+          type: boolean
