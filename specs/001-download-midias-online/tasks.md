@@ -258,3 +258,11 @@ test task has demonstrated the intended failing cases.
 - `[P]` marks only tasks that edit independent files with no incomplete-task dependency.
 - Backend tests are explicit because TDD was requested; use existing Vitest/service-test conventions and maintain near-100% unit coverage for implemented backend requirements.
 - Tasks touching dependencies behind T001 are blocked until the dependency and license are approved; do not silently substitute another library or architecture.
+
+## Phase 7: Convergence
+
+- [ ] T090 [US1] Expose original, container-conversion, and dimension choices only from analyzed media options in `frontend/components/media/media-options.tsx`; send selected `targetContainer`/`targetHeight` from `frontend/app/(protected)/page.tsx` through `frontend/lib/api-client.ts`, and test original bypass/conversion paths per FR-006 (partial).
+- [ ] T091 [US1] Canonicalize validated source URLs in `backend/src/services/downloads/validate-media-url-service.ts` by removing nonessential tracking parameters while preserving media identity; cover platform URL cases before encryption in `backend/src/services/downloads/tests/validate-media-url-service.spec.ts` per `data-model.md` Download source URL rules (partial).
+- [ ] T092 [US2] Align the `/settings` wire contract to the canonical `themePreference` field across `specs/001-download-midias-online/contracts/openapi.yaml`, backend settings DTOs, and `frontend/lib/api-client.ts`; add a contract assertion per the plan's REST/OpenAPI compatibility decision (partial).
+- [ ] T093 Define and enforce approved maximum media bytes and per-account queued-job limits in `backend/src/providers/implementations/yt-dlp/yt-dlp-media-extractor.ts` and `backend/src/services/downloads/create-download-service.ts`; document the selected bounds and test over-limit errors per plan Performance Goals/Constraints (partial).
+- [ ] T094 Review the unrequested root response in `backend/src/index.ts`; remove the `Hello World!` placeholder or replace it with a documented, intentionally public health response and test its contract per the plan's REST route scope (unrequested).
