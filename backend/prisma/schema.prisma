@@ -1,0 +1,75 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum ThemePreference {
+  LIGHT
+  DARK
+}
+
+enum MediaPlatform {
+  YOUTUBE
+  INSTAGRAM
+  FACEBOOK
+}
+
+enum DownloadStatus {
+  QUEUED
+  PROCESSING
+  READY
+  FAILED
+  MEDIA_DELETED
+  EXPIRED
+  DELETE_FAILED
+}
+
+model User {
+  id              String           @id @default(uuid()) @db.VarChar(36)
+  name            String           @db.VarChar(120)
+  email           String           @unique @db.VarChar(254)
+  passwordHash    String           @db.VarChar(255)
+  avatar          String?          @db.VarChar(2048)
+  themePreference ThemePreference  @default(LIGHT)
+  retentionHours  Int              @default(1)
+  downloads       Download[]
+  createdAt       DateTime         @default(now()) @db.DateTime(3)
+  updatedAt       DateTime         @updatedAt @db.DateTime(3)
+}
+
+model Download {
+  id                       String          @id @default(uuid()) @db.VarChar(36)
+  userId                   String          @db.VarChar(36)
+  user                     User            @relation(fields: [userId], references: [id], onDelete: Restrict)
+  platform                 MediaPlatform
+  sourceUrlCiphertext      String          @db.Text
+  sourceUrlIv              String          @db.VarChar(64)
+  sourceUrlTag             String          @db.VarChar(64)
+  sourceUrlKeyVersion      String          @db.VarChar(32)
+  title                    String?         @db.VarChar(512)
+  selectedFormatId         String          @db.VarChar(128)
+  targetContainer          String?         @db.VarChar(16)
+  targetHeight             Int?
+  status                   DownloadStatus  @default(QUEUED)
+  storageObjectKey         String?         @db.VarChar(512)
+  fileName                 String?         @db.VarChar(255)
+  mimeType                 String?         @db.VarChar(127)
+  sizeBytes                BigInt?
+  retentionHoursSnapshot   Int?
+  completedAt              DateTime?       @db.DateTime(3)
+  expiresAt                DateTime?       @db.DateTime(3)
+  failureCode              String?         @db.VarChar(128)
+  replayOfId               String?         @db.VarChar(36)
+  replayOf                 Download?       @relation("DownloadReplay", fields: [replayOfId], references: [id], onDelete: SetNull)
+  replayedDownloads         Download[]      @relation("DownloadReplay")
+  createdAt                DateTime        @default(now()) @db.DateTime(3)
+  updatedAt                DateTime        @updatedAt @db.DateTime(3)
+
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
+  @@index([status, expiresAt])
+}

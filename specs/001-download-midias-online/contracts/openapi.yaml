@@ -98,8 +98,8 @@ paths:
                 required: [platform, options]
                 properties:
                   platform: { type: string, enum: [YOUTUBE, INSTAGRAM, FACEBOOK] }
-                  title: { type: string }
-                  thumbnailUrl: { type: string, format: uri }
+                  title: { type: string, nullable: true }
+                  thumbnailUrl: { type: string, format: uri, nullable: true }
                   options:
                     type: array
                     items: { $ref: '#/components/schemas/MediaOption' }

@@ -1,0 +1,148 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { InMemoryDownloadRepository } from "../../../repositories/implementations/in-memory/downloads";
+import { ValidateMediaUrlService } from "../validate-media-url-service";
+import { CreateDownloadService } from "../create-download-service";
+import { FindDownloadService } from "../find-download-service";
+
+const analysis = {
+  platform: "YOUTUBE" as const,
+  title: "Safe title",
+  thumbnailUrl: null,
+  options: [
+    {
+      id: "format-720",
+      container: "mp4",
+      width: 1280,
+      height: 720,
+      qualityLabel: "720p",
+      isOriginal: true,
+    },
+  ],
+};
+
+describe("CreateDownloadService", () => {
+  let downloadRepository: InMemoryDownloadRepository;
+  const analyzeMediaService = { execute: vi.fn() };
+  const encryptSourceUrl = vi.fn();
+  const urlValidator = new ValidateMediaUrlService();
+  let service: CreateDownloadService;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    downloadRepository = new InMemoryDownloadRepository();
+    analyzeMediaService.execute.mockResolvedValue(analysis);
+    encryptSourceUrl.mockReturnValue({
+      ciphertext: "ciphertext",
+      iv: "iv",
+      tag: "tag",
+      keyVersion: "v1",
+    });
+    service = new CreateDownloadService({ downloadRepository, urlValidator, analyzeMediaService, encryptSourceUrl });
+  });
+
+  it("revalidates the option and persists only the encrypted source URL", async () => {
+    const result = await service.execute({
+      userId: "owner-1",
+      sourceUrl: "https://www.youtube.com/watch?v=example",
+      formatId: "format-720",
+      targetContainer: "mp4",
+      targetHeight: 720,
+    });
+
+    expect(analyzeMediaService.execute).toHaveBeenCalledWith("https://www.youtube.com/watch?v=example");
+    expect(encryptSourceUrl).toHaveBeenCalledWith("https://www.youtube.com/watch?v=example");
+    expect(result.status).toBe("QUEUED");
+    expect(downloadRepository.downloads).toHaveLength(1);
+    expect(downloadRepository.downloads[0]).toMatchObject({
+      userId: "owner-1",
+      platform: "YOUTUBE",
+      sourceUrlCiphertext: "ciphertext",
+      sourceUrlIv: "iv",
+      sourceUrlTag: "tag",
+      sourceUrlKeyVersion: "v1",
+      selectedFormatId: "format-720",
+      targetContainer: "mp4",
+      targetHeight: 720,
+      status: "QUEUED",
+    });
+    expect(downloadRepository.downloads[0]).not.toHaveProperty("sourceUrl");
+  });
+
+  it.each([
+    { formatId: "not-offered", targetContainer: "mp4", targetHeight: 720 },
+    { formatId: "format-720", targetContainer: "webm", targetHeight: 720 },
+    { formatId: "format-720", targetContainer: "mp4", targetHeight: 1080 },
+  ])("rejects unavailable or mismatched format choices", async (selection) => {
+    await expect(
+      service.execute({ userId: "owner-1", sourceUrl: "https://www.youtube.com/watch?v=example", ...selection }),
+    ).rejects.toMatchObject({ code: "FORMAT_NOT_AVAILABLE", statusCode: 422 });
+    expect(downloadRepository.downloads).toHaveLength(0);
+  });
+
+  it("maps repository failures to a safe creation error", async () => {
+    const failingRepository = {
+      createQueued: vi.fn().mockRejectedValue(new Error("db-password=secret")),
+    };
+    const failingService = new CreateDownloadService({
+      downloadRepository: failingRepository,
+      urlValidator,
+      analyzeMediaService,
+      encryptSourceUrl,
+    });
+
+    let caughtError: unknown;
+    try {
+      await failingService.execute({
+        userId: "owner-1",
+        sourceUrl: "https://www.youtube.com/watch?v=example",
+        formatId: "format-720",
+      });
+    } catch (error) {
+      caughtError = error;
+    }
+
+    expect(caughtError).toMatchObject({ code: "DOWNLOAD_CREATION_FAILED", statusCode: 500 });
+    expect(String(caughtError)).not.toContain("db-password");
+  });
+});
+
+describe("FindDownloadService", () => {
+  let downloadRepository: InMemoryDownloadRepository;
+  let service: FindDownloadService;
+
+  beforeEach(() => {
+    downloadRepository = new InMemoryDownloadRepository();
+    service = new FindDownloadService({ downloadRepository });
+  });
+
+  it("uses the authenticated owner for status lookups", async () => {
+    const queuedDownload = await downloadRepository.createQueued({
+      userId: "owner-1",
+      platform: "YOUTUBE",
+      sourceUrlCiphertext: "ciphertext",
+      sourceUrlIv: "iv",
+      sourceUrlTag: "tag",
+      sourceUrlKeyVersion: "v1",
+      selectedFormatId: "format-720",
+    });
+
+    await expect(service.execute({ id: queuedDownload.id, userId: "owner-1" })).resolves.toEqual(queuedDownload);
+  });
+
+  it("returns not found for absent or other-owner downloads", async () => {
+    const queuedDownload = await downloadRepository.createQueued({
+      userId: "owner-1",
+      platform: "YOUTUBE",
+      sourceUrlCiphertext: "ciphertext",
+      sourceUrlIv: "iv",
+      sourceUrlTag: "tag",
+      sourceUrlKeyVersion: "v1",
+      selectedFormatId: "format-720",
+    });
+
+    await expect(service.execute({ id: queuedDownload.id, userId: "other-owner" })).rejects.toMatchObject({
+      code: "DOWNLOAD_NOT_FOUND",
+      statusCode: 404,
+    });
+  });
+});

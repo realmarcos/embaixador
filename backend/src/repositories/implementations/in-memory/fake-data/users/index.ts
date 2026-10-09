@@ -1,0 +1,102 @@
+import { User } from "../../../../users/types";
+
+const userFixtures: Omit<User, "themePreference" | "retentionHours">[] = [
+  {
+    id: "1",
+    name: "Ana Silva",
+    email: "ana.silva@example.com",
+    passwordHash: "fake-password-hash",
+    avatar: "",
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  },
+  {
+    id: "2",
+    name: "Bruno Costa",
+    email: "bruno.costa@example.com",
+    passwordHash: "fake-password-hash",
+    avatar: "",
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  },
+  {
+    id: "3",
+    name: "Carla Oliveira",
+    email: "carla.oliveira@example.com",
+    passwordHash: "fake-password-hash",
+    avatar: "",
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  },
+  {
+    id: "4",
+    name: "Daniel Souza",
+    email: "daniel.souza@example.com",
+    passwordHash: "fake-password-hash",
+    avatar: "",
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  },
+  {
+    id: "5",
+    name: "Eduarda Lima",
+    email: "eduarda.lima@example.com",
+    passwordHash: "fake-password-hash",
+    avatar: "",
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  },
+  {
+    id: "6",
+    name: "Felipe Santos",
+    email: "felipe.santos@example.com",
+    passwordHash: "fake-password-hash",
+    avatar: "",
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  },
+  {
+    id: "7",
+    name: "Gabriela Alves",
+    email: "gabriela.alves@example.com",
+    passwordHash: "fake-password-hash",
+    avatar: "",
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  },
+  {
+    id: "8",
+    name: "Heitor Pereira",
+    email: "heitor.pereira@example.com",
+    passwordHash: "fake-password-hash",
+    avatar: "",
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  },
+  {
+    id: "9",
+    name: "Isabela Rocha",
+    email: "isabela.rocha@example.com",
+    passwordHash: "fake-password-hash",
+    avatar: "",
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  },
+  {
+    id: "10",
+    name: "João Martins",
+    email: "joao.martins@example.com",
+    passwordHash: "fake-password-hash",
+    avatar: "",
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  },
+];
+
+const users: User[] = userFixtures.map((user) => ({
+  ...user,
+  themePreference: "LIGHT",
+  retentionHours: 1,
+}));
+
+export { users };
