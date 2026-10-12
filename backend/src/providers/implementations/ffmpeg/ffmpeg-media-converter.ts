@@ -5,10 +5,15 @@ import { basename, extname, isAbsolute, relative, resolve, sep } from "node:path
 import { promisify } from "node:util";
 import { AppError } from "../../../errors/app-errors";
 import { DownloadedMedia } from "../../../providers/media-extractor/types";
-import { MediaConversionInput, MediaConverterProvider } from "../../../providers/media-converter";
+import {
+  AudioEncoderCapabilities,
+  MediaConversionInput,
+  MediaConverterProvider,
+} from "../../../providers/media-converter";
 
 const execFileAsync = promisify(execFile);
 const conversionTimeoutMs = 5 * 60 * 1000;
+const encoderProbeTimeoutMs = 10 * 1000;
 const maximumOutputBytes = 1024 * 1024;
 const supportedContainers = new Set(["mp4", "webm", "mkv", "mov", "mp3", "m4a", "wav", "ogg", "opus"]);
 
@@ -21,10 +26,12 @@ interface CommandOptions {
 }
 
 type CommandRunner = (executable: string, args: string[], options: CommandOptions) => Promise<void>;
+type EncoderListingRunner = () => Promise<string>;
 
 interface FfmpegMediaConverterDependencies {
   executablePath: string;
   run?: CommandRunner;
+  inspectEncoders?: EncoderListingRunner;
 }
 
 function runProcess(executable: string, args: string[], options: CommandOptions): Promise<void> {
@@ -36,6 +43,30 @@ function runProcess(executable: string, args: string[], options: CommandOptions)
     windowsHide: true,
     env: options.env,
   }).then(() => undefined);
+}
+
+function listEncoders(executablePath: string): Promise<string> {
+  return execFileAsync(executablePath, ["-hide_banner", "-encoders"], {
+    cwd: process.cwd(),
+    timeout: encoderProbeTimeoutMs,
+    maxBuffer: maximumOutputBytes,
+    shell: false,
+    windowsHide: true,
+    env: { PATH: process.env.PATH ?? "" },
+    encoding: "utf8",
+  }).then(({ stdout }) => stdout);
+}
+
+function parseAudioEncoderCapabilities(output: string): AudioEncoderCapabilities {
+  const names = new Set(output.split(/\r?\n/).flatMap((line) => {
+    const fields = line.trim().split(/\s+/);
+    return fields[0]?.startsWith("A") && fields[1] ? [fields[1]] : [];
+  }));
+
+  return {
+    mp3: names.has("libmp3lame") || names.has("mp3"),
+    mp4: names.has("aac") || names.has("libfdk_aac"),
+  };
 }
 
 function mediaTypeFor(container: string): string {
@@ -69,9 +100,19 @@ function isPathInside(directory: string, filePath: string): boolean {
 
 class FfmpegMediaConverter implements MediaConverterProvider {
   private readonly run: CommandRunner;
+  private readonly inspectEncoders: EncoderListingRunner;
+  private audioEncoderCapabilities: Promise<AudioEncoderCapabilities> | undefined;
 
   constructor(private readonly dependencies: FfmpegMediaConverterDependencies) {
     this.run = dependencies.run ?? runProcess;
+    this.inspectEncoders = dependencies.inspectEncoders ?? (() => listEncoders(dependencies.executablePath));
+  }
+
+  getAudioEncoderCapabilities(): Promise<AudioEncoderCapabilities> {
+    this.audioEncoderCapabilities ??= this.inspectEncoders()
+      .then(parseAudioEncoderCapabilities)
+      .catch(() => ({ mp3: false, mp4: false }));
+    return this.audioEncoderCapabilities;
   }
 
   async convert(input: MediaConversionInput): Promise<DownloadedMedia> {

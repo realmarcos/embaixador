@@ -1,4 +1,5 @@
 import { MediaOption } from "../../providers/media-extractor/types";
+import { AudioEncoderCapabilities } from "../../providers/media-converter";
 
 type MediaPresetKind = "original" | "audio" | "video";
 
@@ -48,7 +49,10 @@ function sourceFormatForVideo(video: MediaOption, audio: MediaOption | undefined
   return `${video.id}+${audio.id}`;
 }
 
-function buildMediaFormatCatalog(options: MediaOption[]): ResolvedMediaPreset[] {
+function buildMediaFormatCatalog(
+  options: MediaOption[],
+  audioEncoders: AudioEncoderCapabilities = { mp3: true, mp4: true },
+): ResolvedMediaPreset[] {
   const presets: ResolvedMediaPreset[] = [];
   const original = originalOption(options);
   if (original) {
@@ -70,34 +74,38 @@ function buildMediaFormatCatalog(options: MediaOption[]): ResolvedMediaPreset[] 
 
   const audio = firstAudioOption(options);
   if (audio) {
-    presets.push({
-      id: "audio-mp3",
-      kind: "audio",
-      label: "Áudio MP3",
-      container: "mp3",
-      width: null,
-      height: null,
-      isOriginal: false,
-      sourceFormatId: audio.id,
-      targetContainer: "mp3",
-      targetHeight: null,
-      targetWidth: null,
-      targetAudioOnly: true,
-    });
-    presets.push({
-      id: "audio-mp4",
-      kind: "audio",
-      label: "Áudio MP4",
-      container: "mp4",
-      width: null,
-      height: null,
-      isOriginal: false,
-      sourceFormatId: audio.id,
-      targetContainer: "mp4",
-      targetHeight: null,
-      targetWidth: null,
-      targetAudioOnly: true,
-    });
+    if (audioEncoders.mp3) {
+      presets.push({
+        id: "audio-mp3",
+        kind: "audio",
+        label: "Áudio MP3",
+        container: "mp3",
+        width: null,
+        height: null,
+        isOriginal: false,
+        sourceFormatId: audio.id,
+        targetContainer: "mp3",
+        targetHeight: null,
+        targetWidth: null,
+        targetAudioOnly: true,
+      });
+    }
+    if (audioEncoders.mp4) {
+      presets.push({
+        id: "audio-mp4",
+        kind: "audio",
+        label: "Áudio MP4",
+        container: "mp4",
+        width: null,
+        height: null,
+        isOriginal: false,
+        sourceFormatId: audio.id,
+        targetContainer: "mp4",
+        targetHeight: null,
+        targetWidth: null,
+        targetAudioOnly: true,
+      });
+    }
   }
 
   const videoOptions = options

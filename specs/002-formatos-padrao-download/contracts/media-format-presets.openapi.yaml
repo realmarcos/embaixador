@@ -27,13 +27,16 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [platform, title, options]
+                required: [platform, title, thumbnailUrl, options]
                 properties:
                   platform:
                     type: string
                     enum: [YOUTUBE, INSTAGRAM, FACEBOOK]
                   title:
                     type: [string, 'null']
+                  thumbnailUrl:
+                    type: [string, 'null']
+                    format: uri
                   options:
                     type: array
                     items:
@@ -41,7 +44,7 @@ paths:
         '400':
           description: Invalid media URL or request.
         '422':
-          description: Unsupported platform or media with no supported preset.
+          description: Unsupported platform.
   /downloads:
     post:
       operationId: createDownload

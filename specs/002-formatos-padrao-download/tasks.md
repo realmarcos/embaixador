@@ -133,4 +133,13 @@ After the tests are in place:
 - `[P]` marks independent file work only; story-specific tasks all carry `[US1]`.
 - Backend tests are included to meet the project constitution; no new test or runtime dependency is proposed.
 - Existing migration compatibility and media confidentiality must be preserved.
-- Prisma migration status was attempted, but MySQL at `localhost:3307` was unreachable (`P1001`); no migration was applied and database state remains unverified.
+- Prisma migration status initially failed with `P1001` while MySQL at `localhost:3307` was unavailable. A later `npm run db:migrate:status` found two migrations and reported the schema up to date.
+
+## Phase 5: Convergence
+
+**Purpose**: Close remaining capability, contract, and end-to-end validation gaps found after implementation.
+
+- [X] T022 [US1] Detect support for MP3 and MP4 audio in the configured FFmpeg build before offering audio presets; omit unsupported outputs and cover missing encoders in `backend/src/services/downloads/media-format-catalog.ts`, `backend/src/services/downloads/analyze-media-service.ts`, and `backend/src/services/downloads/tests/media-format-catalog.spec.ts` per plan Data Model Availability Rules and FR-002/FR-003 (missing).
+- [X] T023 [US1] Align the analysis contract with the public response by documenting nullable `thumbnailUrl` and the 200 response with an empty `options` array when no preset is producible; reserve 422 for unsupported media in `specs/002-formatos-padrao-download/contracts/media-format-presets.openapi.yaml` per plan contract-compatibility decision and FR-001 (partial).
+- [ ] T024 [US1] Run the quickstart acceptance scenarios against disposable MySQL and private S3 test resources using authorized media; use `ffprobe` to record audio-only streams, selected video dimensions, DCI padding, original bypass, and stale-preset rejection in `specs/002-formatos-padrao-download/quickstart.md` per the implementation strategy and SC-001/SC-003/SC-005 (missing).
+- [X] T025 Reconcile the T021 migration-status note in `specs/002-formatos-padrao-download/tasks.md` with the current `prisma migrate status` result, which reports the schema up to date, per T021 verification record (partial).

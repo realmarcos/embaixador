@@ -5,6 +5,7 @@ import { AnalyzeMediaService } from "../analyze-media-service";
 describe("AnalyzeMediaService", () => {
   const urlValidator = { execute: vi.fn() };
   const mediaExtractor = { analyze: vi.fn(), download: vi.fn() };
+  const getAudioEncoderCapabilities = vi.fn();
   let service: AnalyzeMediaService;
 
   beforeEach(() => {
@@ -13,7 +14,8 @@ describe("AnalyzeMediaService", () => {
       url: "https://www.youtube.com/watch?v=video-id",
       platform: "YOUTUBE",
     });
-    service = new AnalyzeMediaService({ urlValidator, mediaExtractor });
+    getAudioEncoderCapabilities.mockResolvedValue({ mp3: true, mp4: true });
+    service = new AnalyzeMediaService({ urlValidator, mediaExtractor, getAudioEncoderCapabilities });
   });
 
   afterEach(() => {
@@ -130,6 +132,30 @@ describe("AnalyzeMediaService", () => {
       code: "MEDIA_ANALYSIS_FAILED",
       statusCode: 502,
     });
+  });
+
+  it("does not publish audio presets when the configured FFmpeg lacks encoders", async () => {
+    getAudioEncoderCapabilities.mockResolvedValue({ mp3: false, mp4: false });
+    mediaExtractor.analyze.mockResolvedValue({
+      platform: "YOUTUBE",
+      title: "Video",
+      thumbnailUrl: null,
+      options: [{
+        id: "muxed",
+        container: "mp4",
+        width: 1280,
+        height: 720,
+        qualityLabel: "720p",
+        isOriginal: true,
+        hasAudio: true,
+        hasVideo: true,
+      }],
+    });
+
+    const result = await service.execute("https://www.youtube.com/watch?v=video-id");
+    expect(result.options.map(({ id }) => id)).not.toContain("audio-mp3");
+    expect(result.options.map(({ id }) => id)).not.toContain("audio-mp4");
+    expect(getAudioEncoderCapabilities).toHaveBeenCalledOnce();
   });
 
   it("maps provider errors to a safe message without leaking raw output", async () => {

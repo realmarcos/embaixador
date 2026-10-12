@@ -20,6 +20,40 @@ afterEach(async () => {
 });
 
 describe("FfmpegMediaConverter", () => {
+  it("detects supported audio encoders once and fails closed when probing fails", async () => {
+    const inspectEncoders = vi.fn().mockResolvedValue([
+      "Encoders:",
+      " A....D aac AAC (Advanced Audio Coding)",
+      " A....D libmp3lame MP3 (MPEG audio layer 3)",
+    ].join("\n"));
+    const converter = new FfmpegMediaConverter({ executablePath: "/usr/bin/ffmpeg", inspectEncoders });
+
+    await expect(converter.getAudioEncoderCapabilities()).resolves.toEqual({ mp3: true, mp4: true });
+    await converter.getAudioEncoderCapabilities();
+    expect(inspectEncoders).toHaveBeenCalledOnce();
+
+    const unavailable = new FfmpegMediaConverter({
+      executablePath: "/missing/ffmpeg",
+      inspectEncoders: vi.fn().mockRejectedValue(new Error("not found")),
+    });
+    await expect(unavailable.getAudioEncoderCapabilities()).resolves.toEqual({ mp3: false, mp4: false });
+  });
+
+  it("runs the encoder probe through the configured executable without a shell", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "embaixador-ffmpeg-encoders-test-"));
+    temporaryDirectories.push(directory);
+    const executablePath = join(directory, "fake-ffmpeg");
+    await writeFile(executablePath, [
+      "#!/usr/bin/env node",
+      "process.stdout.write(' A....D aac AAC\\n A....D libmp3lame MP3\\n');",
+      "",
+    ].join("\n"));
+    await chmod(executablePath, 0o755);
+
+    const converter = new FfmpegMediaConverter({ executablePath });
+    await expect(converter.getAudioEncoderCapabilities()).resolves.toEqual({ mp3: true, mp4: true });
+  });
+
   it("runs the default execFile adapter with an isolated executable", async () => {
     const directory = await mkdtemp(join(tmpdir(), "embaixador-ffmpeg-process-test-"));
     temporaryDirectories.push(directory);

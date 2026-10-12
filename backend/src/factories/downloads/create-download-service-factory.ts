@@ -1,5 +1,6 @@
 import type { PrismaClient } from "@prisma/client";
 import { MediaExtractorProvider } from "../../providers/media-extractor";
+import { AudioEncoderCapabilities } from "../../providers/media-converter";
 import { PrismaDownloadRepository } from "../../repositories/implementations/prisma/downloads";
 import { AnalyzeMediaService } from "../../services/downloads/analyze-media-service";
 import { CreateDownloadService } from "../../services/downloads/create-download-service";
@@ -10,17 +11,19 @@ import { ValidateMediaUrlService } from "../../services/downloads/validate-media
 interface CreateDownloadServiceFactoryInput {
   prisma: PrismaClient;
   mediaExtractor: Pick<MediaExtractorProvider, "analyze" | "download">;
+  getAudioEncoderCapabilities: () => Promise<AudioEncoderCapabilities>;
   sourceUrlEncryptionKey: string;
 }
 
 function createDownloadServiceFactory({
   prisma,
   mediaExtractor,
+  getAudioEncoderCapabilities,
   sourceUrlEncryptionKey,
 }: CreateDownloadServiceFactoryInput) {
   const downloadRepository = new PrismaDownloadRepository(prisma);
   const urlValidator = new ValidateMediaUrlService();
-  const analyzeMediaService = new AnalyzeMediaService({ urlValidator, mediaExtractor });
+  const analyzeMediaService = new AnalyzeMediaService({ urlValidator, mediaExtractor, getAudioEncoderCapabilities });
   const createDownloadService = new CreateDownloadService({
     downloadRepository,
     urlValidator,

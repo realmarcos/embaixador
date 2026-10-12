@@ -72,6 +72,12 @@ describe("buildMediaFormatCatalog", () => {
     expect(presets.map(({ id }) => id)).not.toContain("audio-mp4");
   });
 
+  it("offers each audio preset only when its FFmpeg encoder is available", () => {
+    const presets = buildMediaFormatCatalog([option()], { mp3: true, mp4: false });
+    expect(presets.map(({ id }) => id)).toContain("audio-mp3");
+    expect(presets.map(({ id }) => id)).not.toContain("audio-mp4");
+  });
+
   it("prefers muxed video or combines video with an audio-only source", () => {
     const muxed = buildMediaFormatCatalog([
       option({ id: "video-only", hasAudio: false }),

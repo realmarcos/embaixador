@@ -65,7 +65,13 @@ const mediaExtractor = new YtDlpMediaExtractor({
     return egressProxyUrl;
   },
 });
-const downloadServices = createDownloadServiceFactory({ prisma, mediaExtractor, sourceUrlEncryptionKey });
+const mediaConverter = new FfmpegMediaConverter({ executablePath: ffmpegPath });
+const downloadServices = createDownloadServiceFactory({
+  prisma,
+  mediaExtractor,
+  getAudioEncoderCapabilities: () => mediaConverter.getAudioEncoderCapabilities(),
+  sourceUrlEncryptionKey,
+});
 const storageClient = new S3Client({
   region: s3Region,
   ...(environment.s3Endpoint ? { endpoint: environment.s3Endpoint, forcePathStyle: true } : {}),
@@ -84,7 +90,7 @@ const processDownloadJobService = new ProcessDownloadJobService({
   downloadRepository,
   mediaExtractor,
   mediaStorage,
-  mediaConverter: new FfmpegMediaConverter({ executablePath: ffmpegPath }),
+  mediaConverter,
   decryptSourceUrl: createSourceUrlDecryptor(sourceUrlEncryptionKey),
   getRetentionHours: async (userId) => {
     const user = await prisma.user.findUnique({ where: { id: userId }, select: { retentionHours: true } });

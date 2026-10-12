@@ -1,12 +1,14 @@
 import { AppError } from "../../errors/app-errors";
 import { MediaAnalysis, MediaOption, MediaPreset, MediaPresetAnalysis } from "../../providers/media-extractor/types";
 import { MediaExtractorProvider } from "../../providers/media-extractor";
+import { AudioEncoderCapabilities } from "../../providers/media-converter";
 import { ValidatedMediaUrl, ValidateMediaUrlService } from "./validate-media-url-service";
 import { buildMediaFormatCatalog, ResolvedMediaPreset } from "./media-format-catalog";
 
 interface AnalyzeMediaServiceDependencies {
   urlValidator: Pick<ValidateMediaUrlService, "execute">;
   mediaExtractor: Pick<MediaExtractorProvider, "analyze">;
+  getAudioEncoderCapabilities: () => Promise<AudioEncoderCapabilities>;
 }
 
 function isValidDimension(value: number | null): boolean {
@@ -82,13 +84,17 @@ function toPublicPreset(preset: ResolvedMediaPreset): MediaPreset {
   };
 }
 
-function mapAnalysis(validated: ValidatedMediaUrl, analysis: MediaAnalysis): AnalyzedMediaWithCatalog {
+function mapAnalysis(
+  validated: ValidatedMediaUrl,
+  analysis: MediaAnalysis,
+  audioEncoders: AudioEncoderCapabilities,
+): AnalyzedMediaWithCatalog {
   if (analysis.platform !== validated.platform || !Array.isArray(analysis.options)) {
     throw analysisFailed();
   }
 
   const options = analysis.options.map(toPublicOption).filter((option) => option !== undefined);
-  const presets = buildMediaFormatCatalog(options);
+  const presets = buildMediaFormatCatalog(options, audioEncoders);
 
   return {
     analysis: {
@@ -114,7 +120,11 @@ class AnalyzeMediaService {
       throw analysisFailed();
     }
 
-    return mapAnalysis(validated, analysis);
+    const hasAnalyzedAudio = analysis.options.some((option) => option.hasAudio === true);
+    const audioEncoders = hasAnalyzedAudio
+      ? await this.dependencies.getAudioEncoderCapabilities()
+      : { mp3: false, mp4: false };
+    return mapAnalysis(validated, analysis, audioEncoders);
   }
 
   async execute(input: string): Promise<MediaPresetAnalysis> {

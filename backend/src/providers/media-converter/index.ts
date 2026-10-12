@@ -1,5 +1,10 @@
 import { DownloadedMedia } from "../media-extractor/types";
 
+interface AudioEncoderCapabilities {
+  mp3: boolean;
+  mp4: boolean;
+}
+
 interface MediaConversionInput {
   filePath: string;
   fileName: string;
@@ -13,6 +18,7 @@ interface MediaConversionInput {
 
 interface MediaConverterProvider {
   convert(input: MediaConversionInput): Promise<DownloadedMedia>;
+  getAudioEncoderCapabilities(): Promise<AudioEncoderCapabilities>;
 }
 
-export { MediaConversionInput, MediaConverterProvider };
+export { AudioEncoderCapabilities, MediaConversionInput, MediaConverterProvider };
