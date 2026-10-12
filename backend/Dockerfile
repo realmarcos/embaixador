@@ -1,4 +1,4 @@
-FROM node:24.18.0-bookworm-slim
+FROM node:24.18.0-bookworm-slim AS development
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ffmpeg python3 python3-venv ca-certificates \
@@ -29,3 +29,10 @@ RUN mkdir -p /tmp/embaixador
 EXPOSE 8080
 
 CMD ["npm", "run", "dev"]
+
+FROM development AS production
+
+RUN npm run build
+ENV NODE_ENV=production
+
+CMD ["npm", "start"]

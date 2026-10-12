@@ -1,0 +1,30 @@
+name: embaixador-cloudrun
+
+services:
+  backend:
+    image: ${AR_REPOSITORY:?Defina AR_REPOSITORY conforme docs/cloud-run.md}/backend:${IMAGE_TAG:?Defina IMAGE_TAG}
+    platform: linux/amd64
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: production
+
+  frontend:
+    image: ${AR_REPOSITORY:?Defina AR_REPOSITORY conforme docs/cloud-run.md}/frontend:${IMAGE_TAG:?Defina IMAGE_TAG}
+    platform: linux/amd64
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: production
+      args:
+        NEXT_PUBLIC_API_BASE_URL: /api
+        API_PROXY_TARGET: ${API_PROXY_TARGET:-}
+
+  migrate:
+    image: ${AR_REPOSITORY:?Defina AR_REPOSITORY conforme docs/cloud-run.md}/backend:${IMAGE_TAG:?Defina IMAGE_TAG}
+    platform: linux/amd64
+    profiles: [operations]
+    command: [npm, run, db:migrate:deploy]
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-}
+    restart: "no"

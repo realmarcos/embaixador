@@ -75,6 +75,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+      target: development
     command: ["npm", "run", "db:migrate:deploy"]
     environment:
       DATABASE_URL: mysql://${MYSQL_USER:-embaixador}:${MYSQL_PASSWORD:-local-mysql-password}@db:3306/embaixador
@@ -87,6 +88,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+      target: development
     command: ["npm", "run", "dev"]
     environment:
       NODE_ENV: development
@@ -133,6 +135,7 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      target: development
       args:
         NEXT_PUBLIC_API_BASE_URL: http://localhost:${BACKEND_HOST_PORT:-8080}/api
     command: ["yarn", "dev"]
