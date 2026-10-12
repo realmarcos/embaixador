@@ -101,6 +101,26 @@ yarn dev
 
 A aplicação fica em `http://localhost:3000`. Configure `NEXT_PUBLIC_API_BASE_URL` se a API estiver em outro endereço. O backend deve permitir essa origem em `FRONTEND_ORIGIN`.
 
+## Ambiente local com Docker Compose
+
+O Compose inicializa MySQL, SeaweedFS com API S3 autenticada e bucket `embaixador`, migrações Prisma, backend e frontend. FFmpeg e yt-dlp são instalados na imagem do backend, portanto não dependem de caminhos do host ou do sandbox do VS Code. O SeaweedFS é um projeto open source sob Apache 2.0; veja o [repositório oficial](https://github.com/seaweedfs/seaweedfs).
+
+```sh
+docker compose up --build -d
+docker compose ps
+docker compose logs -f backend frontend
+```
+
+Acesse a aplicação em `http://localhost:3000` e a API em `http://localhost:8080/api`. O MySQL é publicado na porta `3308` por padrão (altere `MYSQL_HOST_PORT` se necessário); o endpoint S3 do SeaweedFS é `http://localhost:8333`.
+
+O Compose usa credenciais previsíveis **somente para desenvolvimento local**. Não as reutilize em ambientes compartilhados ou produção. Para personalizar, exporte as variáveis usadas em `compose.yaml` antes de executar o Compose; `JWT_SIGNING_KEY` deve ter pelo menos 32 bytes e `SOURCE_URL_ENCRYPTION_KEY` deve ser Base64 de exatamente 32 bytes.
+
+```sh
+docker compose down
+```
+
+`docker compose down` mantém os volumes nomeados. Para apagar também o banco e os objetos SeaweedFS locais, use `docker compose down -v`; essa operação é destrutiva.
+
 ## Testes e qualidade
 
 Backend:

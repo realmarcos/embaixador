@@ -1,0 +1,159 @@
+services:
+  db:
+    image: mysql:8.0
+    environment:
+      MYSQL_DATABASE: embaixador
+      MYSQL_USER: ${MYSQL_USER:-embaixador}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-local-mysql-password}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-local-root-password}
+    ports:
+      - "${MYSQL_HOST_PORT:-3308}:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - mysqladmin ping -h 127.0.0.1 -u"$${MYSQL_USER}" -p"$${MYSQL_PASSWORD}" --silent
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+    restart: unless-stopped
+
+  object-storage:
+    image: chrislusf/seaweedfs:latest
+    command:
+      - mini
+      - -dir=/data
+      - -ip.bind=0.0.0.0
+      - -s3.port=8333
+      - -bucket=${S3_BUCKET:-embaixador}
+    environment:
+      AWS_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:-local-s3-user}
+      AWS_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:-local-s3-password}
+      S3_BUCKET: ${S3_BUCKET:-embaixador}
+    ports:
+      - "${S3_HOST_PORT:-8333}:8333"
+    volumes:
+      - seaweedfs_data:/data
+    restart: unless-stopped
+
+  object-storage-ready:
+    image: node:24.18.0-bookworm-slim
+    depends_on:
+      object-storage:
+        condition: service_started
+    command:
+      - node
+      - -e
+      - |
+        const net = require("node:net");
+        const startedAt = Date.now();
+        function probe() {
+          const socket = net.connect(8333, "object-storage");
+          let finished = false;
+          const retry = () => {
+            if (finished) return;
+            finished = true;
+            socket.destroy();
+            if (Date.now() - startedAt >= 120000) process.exit(1);
+            setTimeout(probe, 1000);
+          };
+          socket.setTimeout(1000);
+          socket.once("connect", () => {
+            finished = true;
+            socket.end();
+            process.exit(0);
+          });
+          socket.once("timeout", retry);
+          socket.once("error", retry);
+        }
+        probe();
+    restart: "no"
+
+  migrate:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: ["npm", "run", "db:migrate:deploy"]
+    environment:
+      DATABASE_URL: mysql://${MYSQL_USER:-embaixador}:${MYSQL_PASSWORD:-local-mysql-password}@db:3306/embaixador
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: ["npm", "run", "dev"]
+    environment:
+      NODE_ENV: development
+      PORT: 8080
+      DATABASE_URL: mysql://${MYSQL_USER:-embaixador}:${MYSQL_PASSWORD:-local-mysql-password}@db:3306/embaixador
+      JWT_SIGNING_KEY: ${JWT_SIGNING_KEY:-local-only-insecure-jwt-signing-key-change-me}
+      SOURCE_URL_ENCRYPTION_KEY: ${SOURCE_URL_ENCRYPTION_KEY:-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=}
+      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://localhost:3000}
+      S3_ENDPOINT: http://object-storage:8333
+      S3_REGION: us-east-1
+      S3_BUCKET: ${S3_BUCKET:-embaixador}
+      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:-local-s3-user}
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:-local-s3-password}
+      MEDIA_TEMP_DIRECTORY: /tmp/embaixador
+      YT_DLP_PATH: /opt/yt-dlp/bin/yt-dlp
+      FFMPEG_PATH: /usr/bin/ffmpeg
+    ports:
+      - "${BACKEND_HOST_PORT:-8080}:8080"
+    volumes:
+      - ./backend/src:/app/src
+      - ./backend/prisma:/app/prisma
+    tmpfs:
+      - /tmp/embaixador:uid=1000,gid=1000,mode=0700
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      object-storage-ready:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:8080/').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_BASE_URL: http://localhost:${BACKEND_HOST_PORT:-8080}/api
+    command: ["yarn", "dev"]
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: http://localhost:${BACKEND_HOST_PORT:-8080}/api
+    ports:
+      - "${FRONTEND_HOST_PORT:-3000}:3000"
+    volumes:
+      - ./frontend/app:/app/app
+      - ./frontend/components:/app/components
+      - ./frontend/lib:/app/lib
+      - ./frontend/public:/app/public
+      - ./frontend/next.config.ts:/app/next.config.ts:ro
+      - ./frontend/postcss.config.mjs:/app/postcss.config.mjs:ro
+      - ./frontend/tsconfig.json:/app/tsconfig.json:ro
+      - ./frontend/next-env.d.ts:/app/next-env.d.ts
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  mysql_data:
+  seaweedfs_data:
