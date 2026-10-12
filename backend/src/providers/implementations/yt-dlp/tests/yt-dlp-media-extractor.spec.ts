@@ -216,6 +216,7 @@ describe("YtDlpMediaExtractor", () => {
     const run = vi.fn<Runner>().mockImplementation(async (_executable, args, options) => {
       expect(args).toContain("--format=18");
       expect(args).toContain("--no-write-info-json");
+      expect(args[args.indexOf("--output") + 1]).toBe(join(outputDirectory, "%(title)s.%(ext)s"));
       expect(options.cwd).toBe(outputDirectory);
       await writeFile(outputFile, "test-media-bytes");
       return `${outputFile}\n`;

@@ -288,7 +288,7 @@ class YtDlpMediaExtractor implements MediaExtractorProvider {
           "--quiet",
           `--format=${request.formatId}`,
           "--output",
-          resolve(outputDirectory, "%(id)s.%(ext)s"),
+          resolve(outputDirectory, "%(title)s.%(ext)s"),
           "--print",
           "after_move:filepath",
           validated.url,
