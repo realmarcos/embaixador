@@ -12,8 +12,7 @@ RUN apt-get update \
        bash \
     && rm -rf /var/lib/apt/lists/* \
     && python3 -m venv /opt/yt-dlp \
-    && /opt/yt-dlp/bin/pip install --no-cache-dir yt-dlp \
-    && npm install -g yarn@1.22.22
+    && /opt/yt-dlp/bin/pip install --no-cache-dir yt-dlp
 
 ENV PATH="/opt/yt-dlp/bin:${PATH}"
 ENV YT_DLP_PATH="/opt/yt-dlp/bin/yt-dlp"
