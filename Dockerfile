@@ -13,8 +13,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/* \
     && python3 -m venv /opt/yt-dlp \
     && /opt/yt-dlp/bin/pip install --no-cache-dir yt-dlp \
-    && corepack enable \
-    && corepack prepare yarn@1.22.22 --activate
+    && npm install -g yarn@1.22.22
 
 ENV PATH="/opt/yt-dlp/bin:${PATH}"
 ENV YT_DLP_PATH="/opt/yt-dlp/bin/yt-dlp"
@@ -51,6 +50,7 @@ ARG API_PROXY_TARGET=http://127.0.0.1:8081
 ENV NEXT_PUBLIC_API_BASE_URL=${NEXT_PUBLIC_API_BASE_URL}
 ENV API_PROXY_TARGET=${API_PROXY_TARGET}
 ENV NODE_ENV=production
+ENV NODE_OPTIONS="--max-old-space-size=2048"
 
 RUN yarn build
 

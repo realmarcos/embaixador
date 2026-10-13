@@ -1,0 +1,24 @@
+# ==============================================================================
+# Google Cloud SDK Ignore File
+# Garante que todo o código fonte (incluindo frontend/ e backend/) seja enviado,
+# enquanto ignora caches pesados, dependências locais e diretórios de build.
+# ==============================================================================
+.gcloudignore
+.git/
+.github/
+**/node_modules
+**/.next
+**/dist
+**/build
+**/coverage
+.env*
+!.env.example
+*.log
+*.tmp
+/tmp/
+specs/
+docs/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

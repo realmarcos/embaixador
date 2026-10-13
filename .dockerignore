@@ -1,38 +1,32 @@
 # Git
-.git/
-.github/
+.git
+.github
 
 # Node dependencies and caches
-node_modules/
-backend/node_modules/
-frontend/node_modules/
-.npm/
-.yarn/
+**/node_modules
+.npm
+.yarn
 
 # Build artifacts
-**/dist/
-**/build/
-**/.next/
-**/out/
-**/coverage/
+**/dist
+**/build
+**/.next
+**/out
+**/coverage
 
 # Environment files and secrets
 .env*
 !.env.example
-backend/.env*
-!backend/.env.example
-frontend/.env*
-!frontend/.env.example
 
 # Logs and temporary files
 *.log
 *.tmp
-/tmp/
+/tmp
 
 # Documentation and editor files
-specs/
-docs/
-.vscode/
-.idea/
+specs
+docs
+.vscode
+.idea
 .DS_Store
 Thumbs.db
