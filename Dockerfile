@@ -66,6 +66,7 @@ ENV INTERNAL_BACKEND_PORT=8081
 ENV MEDIA_TEMP_DIRECTORY=/tmp/embaixador
 ENV YT_DLP_PATH=/opt/yt-dlp/bin/yt-dlp
 ENV YT_DLP_PROXY=""
+ENV YT_DLP_NO_CHECK_CERTIFICATES=false
 ENV FFMPEG_PATH=/usr/bin/ffmpeg
 
 COPY --from=backend-builder /app/backend /app/backend

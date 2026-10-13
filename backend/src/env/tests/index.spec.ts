@@ -17,6 +17,19 @@ const productionEnvironment = {
 };
 
 describe("loadEnvironment", () => {
+  it.each([undefined, "", " ", "false", " false "])("keeps certificate validation enabled for %s", (value) => {
+    expect(loadEnvironment({ NODE_ENV: "test", YT_DLP_NO_CHECK_CERTIFICATES: value }).ytDlpNoCheckCertificates).toBe(false);
+  });
+
+  it.each(["true", " true "])("allows an explicit temporary certificate bypass for %s", (value) => {
+    expect(loadEnvironment({ ...productionEnvironment, YT_DLP_NO_CHECK_CERTIFICATES: value }).ytDlpNoCheckCertificates).toBe(true);
+  });
+
+  it.each(["1", "0", "TRUE", "yes", "invalid-secret"])("rejects malformed certificate bypass setting %s", (value) => {
+    expect(() => loadEnvironment({ NODE_ENV: "test", YT_DLP_NO_CHECK_CERTIFICATES: value }))
+      .toThrow(/^YT_DLP_NO_CHECK_CERTIFICATES must be true or false$/);
+  });
+
   it.each([undefined, "", "   "])("disables the optional upstream proxy for %s", (value) => {
     expect(loadEnvironment({ NODE_ENV: "test", YT_DLP_PROXY: value }).ytDlpProxy).toBeUndefined();
   });

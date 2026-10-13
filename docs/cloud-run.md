@@ -36,6 +36,20 @@ gcloud run services update NOME_DO_SERVICO --region="$REGION" \
 
 Para desativar, atualize o servico com `--remove-secrets=YT_DLP_PROXY`. Se a variavel foi configurada diretamente, remova-a tambem com `--remove-env-vars=YT_DLP_PROXY`. Sem a variavel, o proxy local continua funcionando como antes.
 
+Para um diagnostico temporario de certificados, a opcao `YT_DLP_NO_CHECK_CERTIFICATES=true` adiciona `--no-check-certificates` ao yt-dlp na analise e no download. Ela desativa a validacao de certificados HTTPS de todas as conexoes do yt-dlp, nao apenas do proxy; permite interceptacao e nao corrige uma recusa CONNECT/502. A conexao ao upstream HTTP nao possui certificado TLS. O padrao seguro e `false`.
+
+```sh
+# Somente durante um teste autorizado; use o servico que executa o backend.
+gcloud run services update NOME_DO_SERVICO --region="$REGION" \
+  --update-env-vars=YT_DLP_NO_CHECK_CERTIFICATES=true
+
+# Ao concluir o teste, restaure a verificacao.
+gcloud run services update NOME_DO_SERVICO --region="$REGION" \
+  --update-env-vars=YT_DLP_NO_CHECK_CERTIFICATES=false
+```
+
+Esses comandos preservam as demais variaveis e segredos. Nao use o bypass como solucao permanente: corrija os certificados/cadeia de confianca. O backend registra um aviso enquanto a opcao estiver ativa.
+
 Valide analise e download de uma midia pequena autorizada na revisao nova. O upstream precisa aceitar destinos com IP publico fixado: HTTP com IP na URL e Host original, e CONNECT para IP:443. Nao ha fallback direto em caso de falha; proxies de datacenter ou rotacao de IP ainda podem ser bloqueados pela plataforma. Esta versao suporta apenas conexao HTTP ao proxy contratado: HTTP Basic nao cifra as credenciais nesse trecho, embora midias HTTPS preservem o TLS original sem desabilitar certificados.
 
 ## Deploy com Dockerfile Único (Cloud Run)

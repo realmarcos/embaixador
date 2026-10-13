@@ -31,6 +31,7 @@ interface YtDlpMediaExtractorDependencies {
   executablePath: string;
   urlValidator: Pick<ValidateMediaUrlService, "execute">;
   proxyUrl?: () => string;
+  noCheckCertificates?: boolean;
   run?: CommandRunner;
 }
 
@@ -293,6 +294,7 @@ class YtDlpMediaExtractor implements MediaExtractorProvider {
         [
           "--ignore-config",
           ...(proxyUrl ? ["--proxy", proxyUrl] : []),
+          ...(this.dependencies.noCheckCertificates ? ["--no-check-certificates"] : []),
           "--no-plugin-dirs",
           "--no-cookies",
           "--no-remote-components",
@@ -365,6 +367,7 @@ class YtDlpMediaExtractor implements MediaExtractorProvider {
         [
           "--ignore-config",
           ...(proxyUrl ? ["--proxy", proxyUrl] : []),
+          ...(this.dependencies.noCheckCertificates ? ["--no-check-certificates"] : []),
           "--no-plugin-dirs",
           "--no-cookies",
           "--no-remote-components",

@@ -105,6 +105,7 @@ services:
       MEDIA_TEMP_DIRECTORY: /tmp/embaixador
       YT_DLP_PATH: /opt/yt-dlp/bin/yt-dlp
       YT_DLP_PROXY: ${YT_DLP_PROXY:-}
+      YT_DLP_NO_CHECK_CERTIFICATES: "${YT_DLP_NO_CHECK_CERTIFICATES:-false}"
       FFMPEG_PATH: /usr/bin/ffmpeg
     ports:
       - "${BACKEND_HOST_PORT:-8080}:8080"

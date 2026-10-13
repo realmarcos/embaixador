@@ -60,6 +60,7 @@ const egressProxyReady = egressProxy.listen().then((url) => {
 });
 const mediaExtractor = new YtDlpMediaExtractor({
   executablePath: ytDlpPath,
+  noCheckCertificates: environment.ytDlpNoCheckCertificates,
   urlValidator,
   proxyUrl: () => {
     if (!egressProxyUrl) {
@@ -68,6 +69,11 @@ const mediaExtractor = new YtDlpMediaExtractor({
     return egressProxyUrl;
   },
 });
+if (environment.ytDlpNoCheckCertificates) {
+  console.warn(
+    "YT_DLP_NO_CHECK_CERTIFICATES is enabled: yt-dlp HTTPS certificate validation is disabled. Use only for temporary diagnostics.",
+  );
+}
 const mediaConverter = new FfmpegMediaConverter({ executablePath: ffmpegPath });
 const downloadServices = createDownloadServiceFactory({
   prisma,

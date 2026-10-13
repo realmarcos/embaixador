@@ -13,6 +13,7 @@ export interface EnvironmentConfiguration {
 	mediaTempDirectory?: string;
 	ytDlpPath?: string;
 	ytDlpProxy?: string;
+	ytDlpNoCheckCertificates: boolean;
 	ffmpegPath?: string;
 }
 
@@ -42,6 +43,11 @@ export function loadEnvironment(
 	const port = values.PORT === undefined ? 8080 : Number(values.PORT);
 	if (!Number.isInteger(port) || port < 1 || port > 65535) {
 		throw new Error("PORT must be an integer between 1 and 65535");
+	}
+
+	const noCheckCertificates = values.YT_DLP_NO_CHECK_CERTIFICATES?.trim() ?? "";
+	if (!["", "true", "false"].includes(noCheckCertificates)) {
+		throw new Error("YT_DLP_NO_CHECK_CERTIFICATES must be true or false");
 	}
 
 	const configuredProxy = values.YT_DLP_PROXY?.trim();
@@ -107,6 +113,7 @@ export function loadEnvironment(
 		mediaTempDirectory: values.MEDIA_TEMP_DIRECTORY,
 		ytDlpPath: values.YT_DLP_PATH,
 		ytDlpProxy,
+		ytDlpNoCheckCertificates: noCheckCertificates === "true",
 		ffmpegPath: values.FFMPEG_PATH,
 	};
 }

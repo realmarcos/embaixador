@@ -67,6 +67,7 @@ Variáveis principais:
 | `MEDIA_TEMP_DIRECTORY` | Diretório temporário privado para os jobs de mídia. |
 | `YT_DLP_PATH`, `FFMPEG_PATH` | Caminhos absolutos dos executáveis vistos pelo backend. |
 | `YT_DLP_PROXY` | URL opcional do proxy HTTP contratado, usada apenas na análise e download pelo yt-dlp. |
+| `YT_DLP_NO_CHECK_CERTIFICATES` | `false` por padrão; `true` desativa a validação de certificados HTTPS do yt-dlp apenas para diagnóstico temporário. |
 | `NEXT_PUBLIC_API_BASE_URL` | URL base da API para o frontend; padrão `http://localhost:8080/api`. |
 
 Gere chaves localmente e nunca as coloque neste README. Por exemplo, `openssl rand -hex 32` pode gerar uma chave de assinatura e `openssl rand -base64 32` uma chave de criptografia compatível com o requisito de 32 bytes após decodificação.
@@ -88,6 +89,20 @@ Os Dockerfiles da raiz e do backend declaram `YT_DLP_PROXY` vazia por padrão. F
 O yt-dlp recebe `--proxy` apontando para o proxy **local** de proteção, que encaminha as conexões ao serviço contratado mantendo os bloqueios de destinos privados e o IP público validado por DNS. O upstream precisa aceitar HTTP com IP na URL e `Host` original, e CONNECT para IP na porta 443. Destinos HTTPS preservam TLS/SNI e a verificação de certificados; não há interceptação TLS. A autenticação HTTP Basic entre backend e proxy contratado não é cifrada. Se o upstream falhar, a operação falha, sem tentar acesso direto.
 
 A configuração vale para análise, download e redownload; não altera as conexões de banco, S3 ou frontend. Proxies de datacenter e rotação por requisição ainda podem ser bloqueados pelas plataformas; valide uma mídia pequena autorizada antes de usar em produção.
+
+### Teste temporário sem validação de certificados
+
+A opção oficial do yt-dlp é [`--no-check-certificates`](https://github.com/yt-dlp/yt-dlp#workarounds), **no plural**. Para adicioná-la às operações de análise e download, configure:
+
+```dotenv
+YT_DLP_NO_CHECK_CERTIFICATES=true
+```
+
+Reinicie/recrie o backend após alterar a variável. No Compose, configure no ambiente ou no `.env` da raiz. O backend registra um aviso ao iniciar com a opção ativa. Ausente, vazia ou `false` mantém a verificação habilitada; valores diferentes de `true` e `false` são rejeitados.
+
+**Use somente para diagnóstico temporário:** a opção aceita certificados HTTPS inválidos, inclusive nas conexões com as plataformas e CDNs, permitindo ataques de interceptação. Não é restrita ao certificado do proxy e não desativa a criptografia TLS. Um upstream `http://` não tem certificado TLS nesse trecho; o bypass não resolve recusas CONNECT, autenticação, DNS ou falhas TCP. Ele não altera a validação TLS de Node, S3 ou do frontend nem remove a proteção local de destinos.
+
+Depois do teste, defina `YT_DLP_NO_CHECK_CERTIFICATES=false` ou remova a variável e reinicie o backend. Corrija a cadeia de confiança/certificados em vez de manter o bypass em produção.
 
 ### Diagnóstico de erros de análise
 

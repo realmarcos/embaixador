@@ -22,6 +22,34 @@ afterEach(async () => {
 });
 
 describe("YtDlpMediaExtractor", () => {
+  it.each([undefined, false, true])("only skips certificate validation when explicitly enabled: %s", async (noCheckCertificates) => {
+    const outputDirectory = await mkdtemp(join(tmpdir(), "embaixador-ytdlp-tls-"));
+    temporaryDirectories.push(outputDirectory);
+    const outputFile = join(outputDirectory, "video.mp4");
+    const run = vi.fn<Runner>().mockImplementation(async (_executable, args, options) => {
+      expect(args.filter((argument) => argument === "--no-check-certificates")).toHaveLength(noCheckCertificates === true ? 1 : 0);
+      expect(args).not.toContain("--no-check-certificate");
+      expect(args[args.indexOf("--proxy") + 1]).toBe("http://127.0.0.1:43210");
+      expect(options.shell).toBe(false);
+      expect(options.env.NODE_TLS_REJECT_UNAUTHORIZED).toBeUndefined();
+      if (args.includes("--dump-single-json")) {
+        return JSON.stringify({
+          extractor_key: "Youtube", title: "Fixture",
+          formats: [{ format_id: "18", ext: "mp4", acodec: "aac", vcodec: "h264" }],
+        });
+      }
+      await writeFile(outputFile, "media");
+      return outputFile;
+    });
+    const extractor = new YtDlpMediaExtractor({
+      executablePath: "/usr/bin/yt-dlp", urlValidator: new ValidateMediaUrlService(),
+      proxyUrl: () => "http://127.0.0.1:43210", noCheckCertificates, run,
+    });
+    await extractor.analyze("https://youtube.com/watch?v=fixture");
+    await extractor.download({ url: "https://youtube.com/watch?v=fixture", formatId: "18", outputDirectory });
+    expect(run).toHaveBeenCalledTimes(2);
+  });
+
   it("runs analysis and download through the default execFile adapter", async () => {
     const outputDirectory = await mkdtemp(join(tmpdir(), "embaixador-ytdlp-process-test-"));
     temporaryDirectories.push(outputDirectory);
