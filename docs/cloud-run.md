@@ -2,22 +2,18 @@
 
 ## Arquitetura e persistencia
 
-Você pode implantar a aplicação de duas formas:
-1. **Serviço Único Unificado (Recomendado)**: Usa o [Dockerfile](../Dockerfile) e o [docker-entrypoint.sh](../docker-entrypoint.sh) na raiz do projeto. O Cloud Run executa um único container que contém o frontend Next.js (porta `$PORT`), o backend Express API (porta interna 8081), `yt-dlp`, FFmpeg e executa as migrações Prisma na inicialização.
-2. **Dois Serviços Separados**: Usa o [compose.cloudrun.yaml](../compose.cloudrun.yaml) para construir e publicar imagens separadas de backend e frontend.
-
-Em ambos os casos:
-- MySQL 8.0 no **Cloud SQL**, fora dos containers: contas, histórico, preferências e fila permanecem após reinícios e novos deploys.
-- Mídias em um **bucket privado S3 externo**, fora dos containers. Este guia usa Amazon S3, compatível com o provider atual (incluindo criptografia SSE-S3).
+A aplicação é compilada e executada através de um único [Dockerfile](../Dockerfile) na raiz do projeto:
+- **Container único unificado**: O Cloud Run executa um único container que contém o frontend Next.js (porta `$PORT`), o backend Express API (porta interna 8081), `yt-dlp`, FFmpeg e aplica as migrações Prisma na inicialização.
+- MySQL 8.0 no **Cloud SQL**, fora do container: contas, histórico, preferências e fila de downloads permanecem íntegros entre novos deploys e reinícios.
+- Mídias em um **bucket privado S3 externo**, fora do container.
 - Segredos no Secret Manager; banco persistente conectado via socket Unix `/cloudsql/...`.
-
-Neste fluxo, o deploy é feito com `gcloud`, não com `docker compose up`: redes, `depends_on` e volumes locais do Compose não são a infraestrutura do Cloud Run. Não suba MySQL ou SeaweedFS como containers dentro do Cloud Run para tentar persistir dados. O [compose.yaml](../compose.yaml) continua sendo o ambiente de desenvolvimento com volumes locais.
+- O [Dockerfile](../Dockerfile) é 100% autocontido (não depende de scripts shell externos) e pode ser construído tanto localmente quanto diretamente pelo Cloud Run via `gcloud run deploy --source .`.
 
 ---
 
-## Opção A: Deploy com Dockerfile Unificado (Recomendado)
+## Deploy com Dockerfile Único (Cloud Run)
 
-O [Dockerfile](../Dockerfile) na raiz permite compilar e implantar tudo com um único serviço no Cloud Run.
+O [Dockerfile](../Dockerfile) na raiz contém todas as etapas de build e runtime.
 
 ### 1. Requisitos e variáveis
 

@@ -55,37 +55,7 @@ ENV NODE_ENV=production
 RUN yarn build
 
 # ==============================================================================
-# Target: Backend Isolado (opcional para quem quer rodar só a API)
-# ==============================================================================
-FROM base AS backend-only
-WORKDIR /app/backend
-
-ENV NODE_ENV=production
-ENV PORT=8080
-ENV MEDIA_TEMP_DIRECTORY=/tmp/embaixador
-
-COPY --from=backend-builder /app/backend ./
-RUN mkdir -p /tmp/embaixador
-
-EXPOSE 8080
-CMD ["npm", "start"]
-
-# ==============================================================================
-# Target: Frontend Isolado (opcional para quem quer rodar só o Next.js)
-# ==============================================================================
-FROM base AS frontend-only
-WORKDIR /app/frontend
-
-ENV NODE_ENV=production
-ENV PORT=8080
-
-COPY --from=frontend-builder /app/frontend ./
-
-EXPOSE 8080
-CMD ["./node_modules/.bin/next", "start", "--port", "8080", "--hostname", "0.0.0.0"]
-
-# ==============================================================================
-# Target Final: Produção Unificada (Padrão para Google Cloud Run)
+# Target Final: Imagem Completa e Autocontida para Google Cloud Run
 # Frontend Next.js na porta $PORT e Backend Express na porta interna 8081
 # ==============================================================================
 FROM base AS production
@@ -98,12 +68,30 @@ ENV MEDIA_TEMP_DIRECTORY=/tmp/embaixador
 
 COPY --from=backend-builder /app/backend /app/backend
 COPY --from=frontend-builder /app/frontend /app/frontend
-COPY docker-entrypoint.sh /app/docker-entrypoint.sh
 
-RUN chmod +x /app/docker-entrypoint.sh \
-    && mkdir -p /tmp/embaixador
+# Script de inicialização autocontido gerado diretamente no build
+RUN printf '%s\n' \
+  '#!/bin/bash' \
+  'set -e' \
+  'mkdir -p "${MEDIA_TEMP_DIRECTORY:-/tmp/embaixador}"' \
+  'if [ "${RUN_MIGRATIONS:-true}" = "true" ] && [ -n "$DATABASE_URL" ]; then' \
+  '  echo "==> [Cloud Run] Executando migrações do banco (Prisma)..."' \
+  '  (cd /app/backend && npm run db:migrate:deploy) || echo "==> [Aviso] Falha nas migrações"' \
+  'fi' \
+  'PUBLIC_PORT="${PORT:-8080}"' \
+  'INTERNAL_PORT="${INTERNAL_BACKEND_PORT:-8081}"' \
+  'echo "==> [Cloud Run] Iniciando Backend na porta interna $INTERNAL_PORT..."' \
+  '(export PORT="$INTERNAL_PORT"; cd /app/backend && exec npm start) &' \
+  'BACKEND_PID=$!' \
+  'echo "==> [Cloud Run] Iniciando Frontend na porta $PUBLIC_PORT..."' \
+  '(export PORT="$PUBLIC_PORT" API_PROXY_TARGET="http://127.0.0.1:$INTERNAL_PORT"; cd /app/frontend && exec ./node_modules/.bin/next start --port "$PUBLIC_PORT" --hostname 0.0.0.0) &' \
+  'FRONTEND_PID=$!' \
+  'trap "kill -TERM \$FRONTEND_PID \$BACKEND_PID 2>/dev/null || true; wait \$FRONTEND_PID \$BACKEND_PID 2>/dev/null || true; exit 0" SIGTERM SIGINT' \
+  'wait -n $FRONTEND_PID $BACKEND_PID 2>/dev/null || true' \
+  'kill -TERM $FRONTEND_PID $BACKEND_PID 2>/dev/null || true' \
+  'wait $FRONTEND_PID $BACKEND_PID 2>/dev/null || true' \
+  > /app/entrypoint.sh && chmod +x /app/entrypoint.sh
 
 EXPOSE 8080
 
-ENTRYPOINT ["/app/docker-entrypoint.sh"]
-CMD ["start"]
+ENTRYPOINT ["/app/entrypoint.sh"]
