@@ -11,6 +11,33 @@ A aplicação é compilada e executada através de um único [Dockerfile](../Doc
 
 ---
 
+## Proxy HTTP opcional para o yt-dlp
+
+O backend aceita `YT_DLP_PROXY` no formato `http://USUARIO:SENHA_URL_ENCODED@brd.superproxy.io:44445`. Codifique usuario e senha separadamente com URL encoding. Consulte o [guia de configuracao](../README.md#proxy-opcional-para-mídias) para os limites e o encadeamento com o proxy local de protecao.
+
+Como a URL contem credenciais, crie um segredo opcional `embaixador-yt-dlp-proxy` no Secret Manager pelo console, sem espacos ou quebra de linha no valor. Nao coloque a URL em argumentos de deploy, Dockerfiles ou variaveis `NEXT_PUBLIC_*`.
+
+Depois de criar a service account correspondente, conceda acesso ao segredo:
+
+```sh
+# SERVICE_SA no deploy unificado; BACKEND_SA no deploy separado.
+gcloud secrets add-iam-policy-binding embaixador-yt-dlp-proxy \
+  --member="serviceAccount:${SERVICE_SA}" --role=roles/secretmanager.secretAccessor
+```
+
+No deploy unificado, acrescente `YT_DLP_PROXY=embaixador-yt-dlp-proxy:1` a lista de `--set-secrets` do servico da aplicacao. No deploy separado, use `${BACKEND_SA}` no comando IAM e acrescente o segredo somente ao servico backend, nunca ao frontend nem ao job de migracoes. Ajuste a versao do segredo conforme necessario. A injecao de ambiente tambem funciona com o Dockerfile raiz; nao e necessario alterar a imagem.
+
+Para um servico existente, preservar os demais segredos e criar uma nova revisao:
+
+```sh
+gcloud run services update NOME_DO_SERVICO --region="$REGION" \
+  --update-secrets=YT_DLP_PROXY=embaixador-yt-dlp-proxy:1
+```
+
+Para desativar, atualize o servico com `--remove-secrets=YT_DLP_PROXY`. Se a variavel foi configurada diretamente, remova-a tambem com `--remove-env-vars=YT_DLP_PROXY`. Sem a variavel, o proxy local continua funcionando como antes.
+
+Valide analise e download de uma midia pequena autorizada na revisao nova. O upstream precisa aceitar destinos com IP publico fixado: HTTP com IP na URL e Host original, e CONNECT para IP:443. Nao ha fallback direto em caso de falha; proxies de datacenter ou rotacao de IP ainda podem ser bloqueados pela plataforma. Esta versao suporta apenas conexao HTTP ao proxy contratado: HTTP Basic nao cifra as credenciais nesse trecho, embora midias HTTPS preservem o TLS original sem desabilitar certificados.
+
 ## Deploy com Dockerfile Único (Cloud Run)
 
 O [Dockerfile](../Dockerfile) na raiz contém todas as etapas de build e runtime.

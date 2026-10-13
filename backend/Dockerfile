@@ -11,6 +11,7 @@ ENV NODE_ENV=development
 ENV PORT=8080
 ENV MEDIA_TEMP_DIRECTORY=/tmp/embaixador
 ENV YT_DLP_PATH=/opt/yt-dlp/bin/yt-dlp
+ENV YT_DLP_PROXY=""
 ENV FFMPEG_PATH=/usr/bin/ffmpeg
 
 WORKDIR /app

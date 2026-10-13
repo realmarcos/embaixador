@@ -1,15 +1,83 @@
-import { request as httpRequest } from "node:http";
+import { createServer, request as httpRequest } from "node:http";
 import type { ClientRequest, IncomingMessage, RequestOptions } from "node:http";
 import { Readable, Writable } from "node:stream";
-import { Socket } from "node:net";
+import { connect, Socket } from "node:net";
+import type { Duplex } from "node:stream";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createSafeEgressProxy } from "../safe-egress-proxy";
 
 const proxies: ReturnType<typeof createSafeEgressProxy>[] = [];
+const upstreamFixtures: { server: ReturnType<typeof createServer>; sockets: Set<Duplex> }[] = [];
 
 afterEach(async () => {
   await Promise.all(proxies.splice(0).map((proxy) => proxy.close()));
+  await Promise.all(upstreamFixtures.splice(0).map(({ server, sockets }) => {
+    for (const socket of sockets) socket.destroy();
+    return new Promise<void>((resolve, reject) => server.close((error) => {
+      if (error) reject(error);
+      else resolve();
+    }));
+  }));
 });
+
+async function startUpstream(server: ReturnType<typeof createServer>): Promise<string> {
+  const sockets = new Set<Duplex>();
+  upstreamFixtures.push({ server, sockets });
+  server.on("connection", (socket) => {
+    sockets.add(socket);
+    socket.once("close", () => sockets.delete(socket));
+  });
+  await new Promise<void>((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", resolve);
+  });
+  const address = server.address();
+  if (!address || typeof address === "string") throw new Error("Fixture did not bind");
+  return `http://user:p%40ss%3A%23%25@127.0.0.1:${address.port}`;
+}
+
+function getThroughProxy(proxyUrl: string, target = "http://cdn.example/media"): Promise<{ status: number; body: string }> {
+  return new Promise((resolve, reject) => {
+    const request = httpRequest(proxyUrl, {
+      path: target,
+      headers: { "proxy-authorization": "client-secret" },
+    }, (response) => {
+      let body = "";
+      response.setEncoding("utf8");
+      response.on("data", (chunk: string) => { body += chunk; });
+      response.on("end", () => { resolve({ status: response.statusCode ?? 0, body }); });
+      response.on("error", reject);
+    });
+    request.on("error", reject);
+    request.end();
+  });
+}
+
+function tunnelThroughProxy(proxyUrl: string): Promise<string> {
+  const url = new URL(proxyUrl);
+  return new Promise((resolve, reject) => {
+    const socket = connect({ host: url.hostname, port: Number(url.port) });
+    let output = "";
+    let streamSent = false;
+    socket.setTimeout(2000, () => socket.destroy(new Error("Tunnel fixture timed out")));
+    socket.once("connect", () => {
+      socket.write("CONNECT cdn.example:443 HTTP/1.1\r\nHost: cdn.example:443\r\n\r\nclient-head");
+    });
+    socket.on("data", (chunk: Buffer) => {
+      output += chunk.toString("utf8");
+      if (!streamSent && output.includes("server-head")) {
+        streamSent = true;
+        socket.write("stream-data");
+      }
+      if (output.includes("server-headclient-headstream-data")) {
+        resolve(output);
+        socket.destroy();
+      }
+    });
+    socket.on("end", () => { resolve(output); });
+    socket.on("error", reject);
+  });
+}
 
 function createProxy(resolveAddresses: (hostname: string) => Promise<string[]>): ReturnType<typeof createSafeEgressProxy> {
   const proxy = createSafeEgressProxy({ resolveAddresses });
@@ -18,6 +86,198 @@ function createProxy(resolveAddresses: (hostname: string) => Promise<string[]>):
 }
 
 describe("safe yt-dlp egress proxy", () => {
+  it.each(["8.8.8.8", "2001:4860:4860::8888"])("forwards HTTP through an authenticated upstream to pinned IP %s", async (ip) => {
+    const received = vi.fn();
+    const server = createServer((request, response) => {
+      received(request.url, request.headers.host, request.headers["proxy-authorization"]);
+      response.end("media");
+    });
+    const upstreamProxyUrl = await startUpstream(server);
+    const connectTcp = vi.fn();
+    const proxy = createSafeEgressProxy({
+      upstreamProxyUrl,
+      resolveAddresses: vi.fn().mockResolvedValue([ip]),
+      connectTcp,
+    });
+    proxies.push(proxy);
+    expect(await getThroughProxy(await proxy.listen(), "http://cdn.example/media?range=1"))
+      .toEqual({ status: 200, body: "media" });
+    const authority = ip.includes(":") ? `[${ip}]` : ip;
+    expect(received).toHaveBeenCalledWith(
+      `http://${authority}/media?range=1`, "cdn.example", `Basic ${Buffer.from("user:p@ss:#%").toString("base64")}`,
+    );
+    expect(connectTcp).not.toHaveBeenCalled();
+  });
+
+  it.each(["8.8.8.8", "2001:4860:4860::8888"])("tunnels HTTPS through authenticated CONNECT to pinned IP %s", async (ip) => {
+    const received = vi.fn();
+    const server = createServer();
+    server.on("connect", (request, socket, head) => {
+      received(request.url, request.headers["proxy-authorization"]);
+      socket.write("HTTP/1.1 200 Connection Established\r\n\r\nserver-head");
+      if (head.length) socket.write(head);
+      socket.pipe(socket);
+    });
+    const upstreamProxyUrl = await startUpstream(server);
+    const connectTcp = vi.fn();
+    const proxy = createSafeEgressProxy({
+      upstreamProxyUrl,
+      resolveAddresses: vi.fn().mockResolvedValue([ip]),
+      connectTcp,
+    });
+    proxies.push(proxy);
+    const output = await tunnelThroughProxy(await proxy.listen());
+    expect(output).toContain("200 Connection Established");
+    expect(output).toContain("server-headclient-head");
+    expect(output).toContain("stream-data");
+    expect(output).not.toContain("user");
+    const authority = ip.includes(":") ? `[${ip}]` : ip;
+    expect(received).toHaveBeenCalledWith(`${authority}:443`, `Basic ${Buffer.from("user:p@ss:#%").toString("base64")}`);
+    expect(connectTcp).not.toHaveBeenCalled();
+  });
+
+  it("blocks private destinations before reaching the configured upstream", async () => {
+    const received = vi.fn();
+    const server = createServer(received);
+    server.on("connect", received);
+    const proxy = createSafeEgressProxy({
+      upstreamProxyUrl: await startUpstream(server),
+      resolveAddresses: vi.fn().mockResolvedValue(["8.8.8.8", "127.0.0.1"]),
+    });
+    proxies.push(proxy);
+    const url = await proxy.listen();
+    expect((await getThroughProxy(url)).status).toBe(403);
+    expect(await tunnelThroughProxy(url)).toContain("403 Forbidden");
+    expect(received).not.toHaveBeenCalled();
+  });
+
+  it("supports an upstream without credentials and never forwards client proxy authentication", async () => {
+    const received = vi.fn();
+    const server = createServer((request, response) => {
+      received(request.headers["proxy-authorization"]);
+      response.end("media");
+    });
+    const url = new URL(await startUpstream(server));
+    url.username = "";
+    url.password = "";
+    const proxy = createSafeEgressProxy({
+      upstreamProxyUrl: url.toString(),
+      resolveAddresses: vi.fn().mockResolvedValue(["8.8.8.8"]),
+    });
+    proxies.push(proxy);
+    expect((await getThroughProxy(await proxy.listen())).status).toBe(200);
+    expect(received).toHaveBeenCalledWith(undefined);
+  });
+
+  it("closes pending upstream CONNECT requests when the local proxy shuts down", async () => {
+    const server = createServer();
+    let connected: (() => void) | undefined;
+    const ready = new Promise<void>((resolve) => { connected = resolve; });
+    const closed = new Promise<void>((resolve) => {
+      server.on("connect", (_request, socket) => {
+        socket.once("close", () => { resolve(); });
+        socket.on("end", () => socket.end());
+        socket.resume();
+        connected?.();
+      });
+    });
+    const proxy = createSafeEgressProxy({
+      upstreamProxyUrl: await startUpstream(server),
+      resolveAddresses: vi.fn().mockResolvedValue(["8.8.8.8"]),
+    });
+    proxies.push(proxy);
+    const result = tunnelThroughProxy(await proxy.listen());
+    await ready;
+    await proxy.close();
+    await closed;
+    expect(await result).not.toContain("200 Connection Established");
+    await expect(proxy.close()).resolves.toBeUndefined();
+  });
+
+  it("closes established upstream tunnels when the local proxy shuts down", async () => {
+    const server = createServer();
+    let established: (() => void) | undefined;
+    const ready = new Promise<void>((resolve) => { established = resolve; });
+    const closed = new Promise<void>((resolve) => {
+      server.on("connect", (_request, socket) => {
+        socket.once("close", () => { resolve(); });
+        socket.on("end", () => socket.end());
+        socket.resume();
+        socket.write("HTTP/1.1 200 Connection Established\r\n\r\n");
+      });
+    });
+    const proxy = createSafeEgressProxy({
+      upstreamProxyUrl: await startUpstream(server),
+      resolveAddresses: vi.fn().mockResolvedValue(["8.8.8.8"]),
+    });
+    proxies.push(proxy);
+    const url = new URL(await proxy.listen());
+    const request = httpRequest({
+      hostname: url.hostname, port: Number(url.port), method: "CONNECT", path: "cdn.example:443",
+    });
+    request.on("connect", (_response, socket) => {
+      socket.resume();
+      established?.();
+    });
+    request.end();
+    await ready;
+    await proxy.close();
+    await closed;
+  });
+
+  it("closes pending upstream HTTP requests when the local proxy shuts down", async () => {
+    let received: (() => void) | undefined;
+    const ready = new Promise<void>((resolve) => { received = resolve; });
+    let disconnected: (() => void) | undefined;
+    const closed = new Promise<void>((resolve) => { disconnected = resolve; });
+    const server = createServer((request) => {
+      request.socket.once("close", () => { disconnected?.(); });
+      received?.();
+    });
+    const proxy = createSafeEgressProxy({
+      upstreamProxyUrl: await startUpstream(server),
+      resolveAddresses: vi.fn().mockResolvedValue(["8.8.8.8"]),
+    });
+    proxies.push(proxy);
+    const result = getThroughProxy(await proxy.listen()).catch((error: unknown) => error);
+    await ready;
+    await proxy.close();
+    await closed;
+    expect(await result).toBeInstanceOf(Error);
+  });
+
+  it.each(["authentication", "disconnect", "timeout"])("fails closed when upstream has %s failure", async (failure) => {
+    const server = createServer((request, response) => {
+      if (failure === "authentication") {
+        response.writeHead(407);
+        response.end("upstream-private-secret");
+      } else if (failure === "disconnect") {
+        request.socket.destroy();
+      }
+    });
+    server.on("connect", (_request, socket) => {
+      if (failure === "authentication") {
+        socket.end("HTTP/1.1 407 Proxy Authentication Required\r\nContent-Length: 23\r\n\r\nupstream-private-secret");
+      } else if (failure === "disconnect") {
+        socket.destroy();
+      }
+    });
+    const connectTcp = vi.fn();
+    const proxy = createSafeEgressProxy({
+      upstreamProxyUrl: await startUpstream(server),
+      upstreamTimeoutMs: 50,
+      resolveAddresses: vi.fn().mockResolvedValue(["8.8.8.8"]),
+      connectTcp,
+    });
+    proxies.push(proxy);
+    const url = await proxy.listen();
+    expect(await getThroughProxy(url)).toEqual({ status: 502, body: "Outbound media proxy is unavailable" });
+    const output = await tunnelThroughProxy(url);
+    expect(output).toContain("502 Bad Gateway");
+    expect(output).not.toContain("upstream-private-secret");
+    expect(connectTcp).not.toHaveBeenCalled();
+  });
+
   it("blocks an HTTP redirect target resolving to a private address", async () => {
     const resolveAddresses = vi.fn().mockResolvedValue(["127.0.0.1"]);
     const proxy = createProxy(resolveAddresses);

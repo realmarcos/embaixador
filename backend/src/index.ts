@@ -50,7 +50,10 @@ mkdirSync(mediaTempDirectory, { recursive: true });
 const prisma = createPrismaClient({ databaseUrl });
 const authServices = createAuthServiceFactory({ prisma, jwtSigningKey });
 const urlValidator = new ValidateMediaUrlService({ resolveAddresses: resolvePublicDnsAddresses });
-const egressProxy = createSafeEgressProxy({ resolveAddresses: resolvePublicDnsAddresses });
+const egressProxy = createSafeEgressProxy({
+  resolveAddresses: resolvePublicDnsAddresses,
+  upstreamProxyUrl: environment.ytDlpProxy,
+});
 let egressProxyUrl: string | undefined;
 const egressProxyReady = egressProxy.listen().then((url) => {
   egressProxyUrl = url;

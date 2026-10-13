@@ -17,6 +17,41 @@ const productionEnvironment = {
 };
 
 describe("loadEnvironment", () => {
+  it.each([undefined, "", "   "])("disables the optional upstream proxy for %s", (value) => {
+    expect(loadEnvironment({ NODE_ENV: "test", YT_DLP_PROXY: value }).ytDlpProxy).toBeUndefined();
+  });
+
+  it.each([
+    "http://proxy.example:44445",
+    "http://user:p%40ss%3A%23%25@proxy.example:44445",
+    "http://[2001:4860:4860::8888]:44445/",
+  ])("loads an optional HTTP proxy %s", (value) => {
+    expect(loadEnvironment({ ...productionEnvironment, YT_DLP_PROXY: ` ${value} ` }).ytDlpProxy).toBe(value);
+  });
+
+  it.each([
+    "not-a-url",
+    "http:proxy.example",
+    "http:///proxy.example",
+    "http://proxy.example\\path",
+    "https://user:private-secret@proxy.example",
+    "socks5://proxy.example:1080",
+    "http://proxy.example:0",
+    "http://proxy.example:65536",
+    "http://proxy.example/path",
+    "http://proxy.example?token=private-secret",
+    "http://proxy.example#private-secret",
+    "http://proxy.example#",
+    "http://proxy.example?",
+    "http://user:%invalid@proxy.example",
+    "http://user%3Aname:password@proxy.example",
+    "http://user:pass%0Aword@proxy.example",
+    "http://proxy.example\n",
+  ])("rejects invalid proxy configuration without echoing its value", (value) => {
+    expect(() => loadEnvironment({ NODE_ENV: "test", YT_DLP_PROXY: value }))
+      .toThrow(/^YT_DLP_PROXY must be a valid HTTP proxy URL$/);
+  });
+
   it("uses development defaults without requiring production secrets", () => {
     const environment = loadEnvironment({ NODE_ENV: "test" });
 

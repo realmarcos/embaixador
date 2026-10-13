@@ -12,6 +12,7 @@ export interface EnvironmentConfiguration {
 	s3SecretAccessKey?: string;
 	mediaTempDirectory?: string;
 	ytDlpPath?: string;
+	ytDlpProxy?: string;
 	ffmpegPath?: string;
 }
 
@@ -41,6 +42,31 @@ export function loadEnvironment(
 	const port = values.PORT === undefined ? 8080 : Number(values.PORT);
 	if (!Number.isInteger(port) || port < 1 || port > 65535) {
 		throw new Error("PORT must be an integer between 1 and 65535");
+	}
+
+	const configuredProxy = values.YT_DLP_PROXY?.trim();
+	const ytDlpProxy = configuredProxy?.length ? configuredProxy : undefined;
+	if (ytDlpProxy) {
+		try {
+			const proxy = new URL(ytDlpProxy);
+			const username = decodeURIComponent(proxy.username);
+			const password = decodeURIComponent(proxy.password);
+			const hasControlCharacters = [values.YT_DLP_PROXY ?? "", username, password].some(
+				(value) => /\p{Cc}/u.test(value),
+			);
+			if (
+				hasControlCharacters ||
+				!/^http:\/\/[^/]/i.test(ytDlpProxy) || ytDlpProxy.includes("\\") ||
+				proxy.protocol !== "http:" || !proxy.hostname ||
+				(proxy.port !== "" && Number(proxy.port) < 1) ||
+				proxy.pathname !== "/" || proxy.search !== "" || proxy.hash !== "" ||
+				username.includes(":") || ytDlpProxy.includes("?") || ytDlpProxy.includes("#")
+			) {
+				throw new Error("Invalid proxy");
+			}
+		} catch {
+			throw new Error("YT_DLP_PROXY must be a valid HTTP proxy URL");
+		}
 	}
 
 	if (nodeEnv === "production") {
@@ -80,6 +106,7 @@ export function loadEnvironment(
 		s3SecretAccessKey: values.S3_SECRET_ACCESS_KEY,
 		mediaTempDirectory: values.MEDIA_TEMP_DIRECTORY,
 		ytDlpPath: values.YT_DLP_PATH,
+		ytDlpProxy,
 		ffmpegPath: values.FFMPEG_PATH,
 	};
 }

@@ -66,9 +66,28 @@ Variáveis principais:
 | `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | Credenciais do bucket. |
 | `MEDIA_TEMP_DIRECTORY` | Diretório temporário privado para os jobs de mídia. |
 | `YT_DLP_PATH`, `FFMPEG_PATH` | Caminhos absolutos dos executáveis vistos pelo backend. |
+| `YT_DLP_PROXY` | URL opcional do proxy HTTP contratado, usada apenas na análise e download pelo yt-dlp. |
 | `NEXT_PUBLIC_API_BASE_URL` | URL base da API para o frontend; padrão `http://localhost:8080/api`. |
 
 Gere chaves localmente e nunca as coloque neste README. Por exemplo, `openssl rand -hex 32` pode gerar uma chave de assinatura e `openssl rand -base64 32` uma chave de criptografia compatível com o requisito de 32 bytes após decodificação.
+
+### Proxy opcional para mídias
+
+Para usar um proxy HTTP como o Bright Data, configure no `backend/.env`:
+
+```dotenv
+YT_DLP_PROXY=http://USUARIO:SENHA_URL_ENCODED@brd.superproxy.io:44445
+```
+
+Substitua os placeholders localmente. Codifique usuário e senha **separadamente** com URL encoding (por exemplo, `encodeURIComponent`): `@` vira `%40`, `:` vira `%3A`, `#` vira `%23` e `%` vira `%25`. Ajustes de país, IP ou sessão oferecidos pelo provedor podem ser feitos no usuário. Não versione essa URL nem a publique em logs.
+
+Reinicie o backend após alterar a configuração. Remova a variável ou deixe-a vazia para desativar o proxy contratado. Valores inválidos impedem a inicialização com um erro sem credenciais. Esta versão aceita proxies `http://`, com ou sem autenticação; proxies `https://` e SOCKS5 não são suportados.
+
+Os Dockerfiles da raiz e do backend declaram `YT_DLP_PROXY` vazia por padrão. Forneça o valor somente na execução, por exemplo com `docker run --env-file CAMINHO_DO_ENV SUA_IMAGEM`, pelo Compose ou pelo Secret Manager no Cloud Run. Não use argumentos de build nem grave credenciais no Dockerfile; o backend herda a variável fornecida ao container.
+
+O yt-dlp recebe `--proxy` apontando para o proxy **local** de proteção, que encaminha as conexões ao serviço contratado mantendo os bloqueios de destinos privados e o IP público validado por DNS. O upstream precisa aceitar HTTP com IP na URL e `Host` original, e CONNECT para IP na porta 443. Destinos HTTPS preservam TLS/SNI e a verificação de certificados; não há interceptação TLS. A autenticação HTTP Basic entre backend e proxy contratado não é cifrada. Se o upstream falhar, a operação falha, sem tentar acesso direto.
+
+A configuração vale para análise, download e redownload; não altera as conexões de banco, S3 ou frontend. Proxies de datacenter e rotação por requisição ainda podem ser bloqueados pelas plataformas; valide uma mídia pequena autorizada antes de usar em produção.
 
 3. Gere o client Prisma e aplique as migrações em um banco de desenvolvimento:
 
@@ -114,6 +133,8 @@ docker compose logs -f backend frontend
 Acesse a aplicação em `http://localhost:3000` e a API em `http://localhost:8080/api`. O MySQL é publicado na porta `3308` por padrão (altere `MYSQL_HOST_PORT` se necessário); o endpoint S3 do SeaweedFS é `http://localhost:8333`.
 
 O Compose usa credenciais previsíveis **somente para desenvolvimento local**. Não as reutilize em ambientes compartilhados ou produção. Para personalizar, exporte as variáveis usadas em `compose.yaml` antes de executar o Compose; `JWT_SIGNING_KEY` deve ter pelo menos 32 bytes e `SOURCE_URL_ENCRYPTION_KEY` deve ser Base64 de exatamente 32 bytes.
+
+Para ativar o proxy no Compose, exporte `YT_DLP_PROXY` ou configure-a no `.env` da **raiz** antes de recriar o backend com `docker compose up -d backend`. O Compose não carrega automaticamente `backend/.env`. Deixe a variável vazia e recrie o backend para desativá-la. Evite imprimir a configuração resolvida, pois ela contém segredos.
 
 ```sh
 docker compose down

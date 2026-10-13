@@ -156,6 +156,8 @@ describe("YtDlpMediaExtractor", () => {
     expect(JSON.stringify(result)).not.toContain("private");
     expect(capturedCall.executable).toBe("/usr/bin/yt-dlp");
     expect(capturedCall.args).toContain("--ignore-config");
+    expect(capturedCall.args.filter((argument) => argument === "--proxy")).toHaveLength(1);
+    expect(capturedCall.args[capturedCall.args.indexOf("--proxy") + 1]).toBe("http://127.0.0.1:43210");
     expect(capturedCall.args).toContain("--no-cookies");
     expect(capturedCall.args).toContain("--no-plugin-dirs");
     expect(capturedCall.options?.shell).toBe(false);
@@ -163,6 +165,30 @@ describe("YtDlpMediaExtractor", () => {
     expect(capturedCall.options?.env.HTTPS_PROXY).toBe("http://127.0.0.1:43210");
     expect(capturedCall.options?.env.HTTP_PROXY).toBe("http://127.0.0.1:43210");
     expect(capturedCall.options?.env.NO_PROXY).toBe("");
+  });
+
+  it("uses the same local proxy in download arguments and environment, resolving it once", async () => {
+    const outputDirectory = await mkdtemp(join(tmpdir(), "embaixador-ytdlp-proxy-"));
+    temporaryDirectories.push(outputDirectory);
+    const outputFile = join(outputDirectory, "video.mp4");
+    const proxyUrl = vi.fn(() => "http://127.0.0.1:43210");
+    const run = vi.fn<Runner>().mockImplementation(async (_executable, args, options) => {
+      expect(args.filter((argument) => argument === "--proxy")).toHaveLength(1);
+      expect(args[args.indexOf("--proxy") + 1]).toBe(proxyUrl.mock.results[0]?.value);
+      expect(options.env.HTTP_PROXY).toBe("http://127.0.0.1:43210");
+      expect(options.env.HTTPS_PROXY).toBe(options.env.HTTP_PROXY);
+      expect(options.shell).toBe(false);
+      await writeFile(outputFile, "media");
+      return outputFile;
+    });
+    const extractor = new YtDlpMediaExtractor({
+      executablePath: "/usr/bin/yt-dlp",
+      urlValidator: new ValidateMediaUrlService(),
+      proxyUrl,
+      run,
+    });
+    await extractor.download({ url: "https://youtube.com/video", formatId: "18", outputDirectory });
+    expect(proxyUrl).toHaveBeenCalledTimes(1);
   });
 
   it("maps malformed JSON, unsupported hosts, process errors, and timeouts to safe failures", async () => {
@@ -214,6 +240,8 @@ describe("YtDlpMediaExtractor", () => {
     temporaryDirectories.push(outputDirectory);
     const outputFile = join(outputDirectory, "video.mp4");
     const run = vi.fn<Runner>().mockImplementation(async (_executable, args, options) => {
+      expect(args).not.toContain("--proxy");
+      expect(options.env.HTTP_PROXY).toBeUndefined();
       expect(args).toContain("--format=18");
       expect(args).toContain("--no-write-info-json");
       expect(args[args.indexOf("--output") + 1]).toBe(join(outputDirectory, "%(title)s.%(ext)s"));

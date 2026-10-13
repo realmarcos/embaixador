@@ -203,10 +203,12 @@ class YtDlpMediaExtractor implements MediaExtractorProvider {
   async analyze(url: string): Promise<MediaAnalysis> {
     const validated = await this.dependencies.urlValidator.execute(url);
     try {
+      const proxyUrl = this.dependencies.proxyUrl?.();
       const output = await this.run(
         this.dependencies.executablePath,
         [
           "--ignore-config",
+          ...(proxyUrl ? ["--proxy", proxyUrl] : []),
           "--no-plugin-dirs",
           "--no-cookies",
           "--no-remote-components",
@@ -220,7 +222,7 @@ class YtDlpMediaExtractor implements MediaExtractorProvider {
           cwd: process.cwd(),
           timeoutMs: processTimeoutMs,
           maxBufferBytes: maximumOutputBytes,
-          env: providerEnvironment(process.cwd(), this.dependencies.proxyUrl?.()),
+          env: providerEnvironment(process.cwd(), proxyUrl),
           shell: false,
         },
       );
@@ -273,10 +275,12 @@ class YtDlpMediaExtractor implements MediaExtractorProvider {
 
     const outputDirectory = resolve(request.outputDirectory);
     try {
+      const proxyUrl = this.dependencies.proxyUrl?.();
       const output = await this.run(
         this.dependencies.executablePath,
         [
           "--ignore-config",
+          ...(proxyUrl ? ["--proxy", proxyUrl] : []),
           "--no-plugin-dirs",
           "--no-cookies",
           "--no-remote-components",
@@ -297,7 +301,7 @@ class YtDlpMediaExtractor implements MediaExtractorProvider {
           cwd: outputDirectory,
           timeoutMs: processTimeoutMs,
           maxBufferBytes: maximumOutputBytes,
-          env: providerEnvironment(outputDirectory, this.dependencies.proxyUrl?.()),
+          env: providerEnvironment(outputDirectory, proxyUrl),
           shell: false,
         },
       );
