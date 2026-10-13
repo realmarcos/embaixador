@@ -65,6 +65,8 @@ ENV NODE_ENV=production
 ENV PORT=8080
 ENV INTERNAL_BACKEND_PORT=8081
 ENV MEDIA_TEMP_DIRECTORY=/tmp/embaixador
+ENV YT_DLP_PATH=/opt/yt-dlp/bin/yt-dlp
+ENV FFMPEG_PATH=/usr/bin/ffmpeg
 
 COPY --from=backend-builder /app/backend /app/backend
 COPY --from=frontend-builder /app/frontend /app/frontend
@@ -81,7 +83,7 @@ RUN printf '%s\n' \
   'PUBLIC_PORT="${PORT:-8080}"' \
   'INTERNAL_PORT="${INTERNAL_BACKEND_PORT:-8081}"' \
   'echo "==> [Cloud Run] Iniciando Backend na porta interna $INTERNAL_PORT..."' \
-  '(export PORT="$INTERNAL_PORT"; cd /app/backend && exec npm start) &' \
+  '(export PORT="$INTERNAL_PORT" MEDIA_TEMP_DIRECTORY="${MEDIA_TEMP_DIRECTORY:-/tmp/embaixador}" YT_DLP_PATH="${YT_DLP_PATH:-/opt/yt-dlp/bin/yt-dlp}" FFMPEG_PATH="${FFMPEG_PATH:-/usr/bin/ffmpeg}"; cd /app/backend && exec npm start) &' \
   'BACKEND_PID=$!' \
   'echo "==> [Cloud Run] Iniciando Frontend na porta $PUBLIC_PORT..."' \
   '(export PORT="$PUBLIC_PORT" API_PROXY_TARGET="http://127.0.0.1:$INTERNAL_PORT"; cd /app/frontend && exec ./node_modules/.bin/next start --port "$PUBLIC_PORT" --hostname 0.0.0.0) &' \
