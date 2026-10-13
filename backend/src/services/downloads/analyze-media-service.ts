@@ -61,9 +61,10 @@ function safeTitle(value: string | null): string | null {
 
 function analysisFailed(): AppError {
   return new AppError({
-    message: "Unable to analyze this media right now",
+    message: "Unable to analyze this media. Check that the link is public; ask the administrator to check the analyzer and connection.",
     code: "MEDIA_ANALYSIS_FAILED",
     statusCode: 502,
+    exposeMessage: true,
   });
 }
 
@@ -89,10 +90,6 @@ function mapAnalysis(
   analysis: MediaAnalysis,
   audioEncoders: AudioEncoderCapabilities,
 ): AnalyzedMediaWithCatalog {
-  if (analysis.platform !== validated.platform || !Array.isArray(analysis.options)) {
-    throw analysisFailed();
-  }
-
   const options = analysis.options.map(toPublicOption).filter((option) => option !== undefined);
   const presets = buildMediaFormatCatalog(options, audioEncoders);
 
@@ -116,10 +113,16 @@ class AnalyzeMediaService {
 
     try {
       analysis = await this.dependencies.mediaExtractor.analyze(validated.url);
-    } catch {
+    } catch (error) {
+      if (error instanceof AppError && error.exposeMessage) {
+        throw error;
+      }
       throw analysisFailed();
     }
 
+    if (analysis.platform !== validated.platform || !Array.isArray(analysis.options)) {
+      throw analysisFailed();
+    }
     const hasAnalyzedAudio = analysis.options.some((option) => option.hasAudio === true);
     const audioEncoders = hasAnalyzedAudio
       ? await this.dependencies.getAudioEncoderCapabilities()

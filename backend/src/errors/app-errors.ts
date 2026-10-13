@@ -3,13 +3,15 @@ export class AppError extends Error {
   public readonly statusCode: number;
   public readonly code: string;
   public readonly details: unknown;
+  public readonly exposeMessage: boolean;
 
-  constructor({ message, statusCode = 400, code, details }: AppErrorProps) {
+  constructor({ message, statusCode = 400, code, details, exposeMessage = false }: AppErrorProps) {
     super(message);
     this.message = message;
     this.statusCode = statusCode;
     this.code = code;
     this.details = details;
+    this.exposeMessage = exposeMessage;
   }
 
 }
@@ -19,6 +21,7 @@ interface AppErrorProps {
   statusCode?: number;
   code: string;
   details?: unknown;
+  exposeMessage?: boolean;
 }
 
 interface ApiErrorResponse {
@@ -39,7 +42,8 @@ function serializeApiError(error: unknown, requestId: string): SerializedApiErro
     error instanceof AppError &&
     Number.isInteger(error.statusCode) &&
     error.statusCode >= 400 &&
-    error.statusCode < 500
+    error.statusCode <= 599 &&
+    (error.statusCode < 500 || error.exposeMessage)
   ) {
     return {
       statusCode: error.statusCode,

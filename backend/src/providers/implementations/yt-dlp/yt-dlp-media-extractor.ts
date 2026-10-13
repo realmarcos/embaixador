@@ -91,12 +91,96 @@ function safeProviderError(operation: "analysis" | "download"): AppError {
         message: "Unable to analyze this media right now",
         code: "MEDIA_ANALYSIS_FAILED",
         statusCode: 502,
+        exposeMessage: true,
       })
     : new AppError({
         message: "Unable to download this media right now",
         code: "MEDIA_DOWNLOAD_FAILED",
         statusCode: 502,
+        exposeMessage: true,
       });
+}
+
+function analysisError(code: string, message: string, statusCode = 502): AppError {
+  return new AppError({ code, message, statusCode, exposeMessage: true });
+}
+
+function classifyAnalysisFailure(error: unknown): AppError {
+  if (error instanceof AppError) return error;
+  const failure = isRecord(error) || error instanceof Error ? error : undefined;
+  const code: unknown = failure && "code" in failure ? failure.code : undefined;
+  const killed: unknown = failure && "killed" in failure ? failure.killed : undefined;
+  const stderr: unknown = failure && "stderr" in failure ? failure.stderr : undefined;
+  // Match diagnostics locally, but never return raw stderr, URLs or process arguments.
+  const diagnostic = typeof stderr === "string" ? stderr.slice(0, maximumOutputBytes).toLowerCase() : "";
+  if (code === "ENOENT" || code === "EACCES" || code === "EPERM") {
+    return analysisError(
+      "MEDIA_EXTRACTOR_UNAVAILABLE",
+      "The media analyzer could not be started. Ask the administrator to check YT_DLP_PATH and executable permissions.",
+      503,
+    );
+  }
+  if (killed === true || code === "ETIMEDOUT" || /timed out|timeout/.test(diagnostic)) {
+    return analysisError(
+      "MEDIA_ANALYSIS_TIMEOUT",
+      "Media analysis timed out. Try again; if this persists, ask the administrator to check the proxy and connection.",
+      504,
+    );
+  }
+  if (/proxy authentication required|http error 407|tunnel connection failed: 407/.test(diagnostic)) {
+    return analysisError(
+      "MEDIA_PROXY_AUTHENTICATION_FAILED",
+      "The proxy rejected authentication. Ask the administrator to check the proxy username and password.",
+    );
+  }
+  if (/proxyerror|unable to connect to proxy|cannot connect to proxy|tunnel connection failed/.test(diagnostic)) {
+    return analysisError(
+      "MEDIA_PROXY_CONNECTION_FAILED",
+      "Could not connect through the media proxy. Ask the administrator to check proxy availability and configuration.",
+    );
+  }
+  if (/sign in to confirm|login required|log in to|authentication required|cookies are needed|private video/.test(diagnostic)) {
+    return analysisError(
+      "MEDIA_AUTHENTICATION_REQUIRED",
+      "The platform requires login or verification. Use a public media link; this application does not provide platform login.",
+    );
+  }
+  if (/http error 429|too many requests/.test(diagnostic)) {
+    return analysisError("MEDIA_RATE_LIMITED", "The platform is limiting requests. Wait before trying again.");
+  }
+  if (/http error 403|http error 401|access denied|not available in your country|geo.?restricted/.test(diagnostic)) {
+    return analysisError(
+      "MEDIA_ACCESS_DENIED",
+      "The platform denied access to this media. Check that the link is public and accessible from the server or proxy region.",
+    );
+  }
+  if (
+    /video (?:is )?unavailable|video has been removed|http error 404|no longer available/.test(diagnostic)
+  ) {
+    return analysisError(
+      "MEDIA_UNAVAILABLE",
+      "This media is unavailable or has been removed. Check the link and try another public media.",
+    );
+  }
+  if (/certificate_verify_failed|certificate verify failed/.test(diagnostic)) {
+    return analysisError(
+      "MEDIA_TLS_FAILED",
+      "Certificate verification failed. Ask the administrator to check server certificates and the proxy; do not disable TLS verification.",
+    );
+  }
+  if (
+    code === "ENOTFOUND" || code === "ECONNREFUSED" || code === "ECONNRESET" ||
+    /name or service not known|temporary failure in name resolution|getaddrinfo failed|connection refused|connection reset/.test(diagnostic)
+  ) {
+    return analysisError(
+      "MEDIA_CONNECTION_FAILED",
+      "Could not reach the media platform. Check the server or proxy connection and try again.",
+    );
+  }
+  return analysisError(
+    "MEDIA_ANALYSIS_FAILED",
+    "Could not analyze this media. Check that the link is public; ask the administrator to check connectivity and update yt-dlp.",
+  );
 }
 
 function platformFromExtractor(value: unknown): MediaPlatform | undefined {
@@ -235,11 +319,15 @@ class YtDlpMediaExtractor implements MediaExtractorProvider {
         }
         info = parsed;
       } catch {
-        throw safeProviderError("analysis");
+        throw analysisError(
+          "MEDIA_ANALYSIS_INVALID_RESPONSE", "The analyzer returned an invalid response. Ask the administrator to update yt-dlp.",
+        );
       }
 
       if (platformFromExtractor(info.extractor_key) !== validated.platform) {
-        throw safeProviderError("analysis");
+        throw analysisError(
+          "MEDIA_ANALYSIS_INVALID_RESPONSE", "The analyzer returned an unexpected platform. Check the link and update yt-dlp.",
+        );
       }
 
       const formats = Array.isArray(info.formats) ? info.formats : [];
@@ -247,7 +335,9 @@ class YtDlpMediaExtractor implements MediaExtractorProvider {
         .map(toMediaOption)
         .filter((option): option is MediaOption => option !== undefined);
       if (options.length === 0) {
-        throw safeProviderError("analysis");
+        throw analysisError(
+          "MEDIA_NO_FORMATS", "No supported media formats were found. Try another public link or ask the administrator to update yt-dlp.",
+        );
       }
 
       return {
@@ -257,13 +347,7 @@ class YtDlpMediaExtractor implements MediaExtractorProvider {
         options,
       };
     } catch (error) {
-      if (error instanceof AppError && error.code === "UNSUPPORTED_PLATFORM") {
-        throw error;
-      }
-      if (error instanceof AppError && error.code === "INVALID_MEDIA_URL") {
-        throw error;
-      }
-      throw safeProviderError("analysis");
+      throw classifyAnalysisFailure(error);
     }
   }
 

@@ -10,6 +10,14 @@ const errorHandlerMiddleware: ErrorRequestHandler = (error, _request, response, 
 
   const serializedError = serializeApiError(error, randomUUID());
 
+  if (serializedError.statusCode >= 500) {
+    console.error("API request failed", {
+      requestId: serializedError.body.error.requestId,
+      code: serializedError.body.error.code,
+      statusCode: serializedError.statusCode,
+    });
+  }
+
   response.status(serializedError.statusCode).json(serializedError.body);
 };
 

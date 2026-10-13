@@ -201,7 +201,7 @@ describe("YtDlpMediaExtractor", () => {
     });
 
     await expect(extractor.analyze("https://youtube.com/video")).rejects.toMatchObject({
-      code: "MEDIA_ANALYSIS_FAILED",
+      code: "MEDIA_ANALYSIS_INVALID_RESPONSE",
       statusCode: 502,
     });
     await expect(extractor.analyze("https://unsupported.example/video")).rejects.toMatchObject({
@@ -212,17 +212,17 @@ describe("YtDlpMediaExtractor", () => {
     run.mockRejectedValueOnce(new Error("timeout token=secret provider output"));
     await expect(extractor.analyze("https://youtube.com/video")).rejects.toMatchObject({
       code: "MEDIA_ANALYSIS_FAILED",
-      message: "Unable to analyze this media right now",
     });
+    await expect(extractor.analyze("https://youtube.com/video")).rejects.not.toThrow("token=secret");
     expect(log).not.toHaveBeenCalled();
   });
 
   it.each([
-    "[]",
-    JSON.stringify({ extractor_key: "Other", formats: [{ format_id: "18", ext: "mp4" }] }),
-    JSON.stringify({ extractor_key: "Youtube", formats: [] }),
-    JSON.stringify({ extractor_key: "Youtube", formats: [{ format_id: "unsafe id", ext: "mp4" }] }),
-  ])("rejects malformed structured provider payload %s", async (output) => {
+    ["[]", "MEDIA_ANALYSIS_INVALID_RESPONSE"],
+    [JSON.stringify({ extractor_key: "Other", formats: [{ format_id: "18", ext: "mp4" }] }), "MEDIA_ANALYSIS_INVALID_RESPONSE"],
+    [JSON.stringify({ extractor_key: "Youtube", formats: [] }), "MEDIA_NO_FORMATS"],
+    [JSON.stringify({ extractor_key: "Youtube", formats: [{ format_id: "unsafe id", ext: "mp4" }] }), "MEDIA_NO_FORMATS"],
+  ])("rejects malformed structured provider payload %s", async (output, code) => {
     const extractor = new YtDlpMediaExtractor({
       executablePath: "/usr/bin/yt-dlp",
       urlValidator: new ValidateMediaUrlService(),
@@ -230,7 +230,7 @@ describe("YtDlpMediaExtractor", () => {
     });
 
     await expect(extractor.analyze("https://youtube.com/video")).rejects.toMatchObject({
-      code: "MEDIA_ANALYSIS_FAILED",
+      code,
       statusCode: 502,
     });
   });
@@ -267,6 +267,34 @@ describe("YtDlpMediaExtractor", () => {
       mimeType: "video/mp4",
       sizeBytes: 16,
     });
+  });
+
+  it.each([
+    [{ code: "ENOENT" }, "MEDIA_EXTRACTOR_UNAVAILABLE", 503],
+    [{ code: "EACCES" }, "MEDIA_EXTRACTOR_UNAVAILABLE", 503],
+    [{ killed: true }, "MEDIA_ANALYSIS_TIMEOUT", 504],
+    [{ stderr: "Read timed out" }, "MEDIA_ANALYSIS_TIMEOUT", 504],
+    [{ stderr: "Tunnel connection failed: 407 Proxy Authentication Required" }, "MEDIA_PROXY_AUTHENTICATION_FAILED", 502],
+    [{ stderr: "Tunnel connection failed: 502 Bad Gateway" }, "MEDIA_PROXY_CONNECTION_FAILED", 502],
+    [{ stderr: "Sign in to confirm you're not a bot" }, "MEDIA_AUTHENTICATION_REQUIRED", 502],
+    [{ stderr: "Private video. Login required" }, "MEDIA_AUTHENTICATION_REQUIRED", 502],
+    [{ stderr: "HTTP Error 403: Forbidden" }, "MEDIA_ACCESS_DENIED", 502],
+    [{ stderr: "HTTP Error 429: Too Many Requests" }, "MEDIA_RATE_LIMITED", 502],
+    [{ stderr: "Video unavailable" }, "MEDIA_UNAVAILABLE", 502],
+    [{ stderr: "CERTIFICATE_VERIFY_FAILED" }, "MEDIA_TLS_FAILED", 502],
+    [{ code: "ENOTFOUND" }, "MEDIA_CONNECTION_FAILED", 502],
+    [{ stderr: "Temporary failure in name resolution" }, "MEDIA_CONNECTION_FAILED", 502],
+    [{ stderr: "Unrecognized provider failure" }, "MEDIA_ANALYSIS_FAILED", 502],
+  ])("classifies process failure as %s -> %s without exposing raw diagnostics", async (failure, code, statusCode) => {
+    const error = Object.assign(new Error("private command http://user:private-password@proxy.example/path?token=private-token"), failure, {
+      stderr: `${"stderr" in failure ? failure.stderr : ""}\nhttp://user:private-password@proxy.example/?token=private-token`,
+    });
+    const extractor = new YtDlpMediaExtractor({
+      executablePath: "/usr/bin/yt-dlp", urlValidator: new ValidateMediaUrlService(),
+      run: vi.fn<Runner>().mockRejectedValue(error),
+    });
+    await expect(extractor.analyze("https://youtube.com/video")).rejects.toMatchObject({ code, statusCode, exposeMessage: true });
+    await expect(extractor.analyze("https://youtube.com/video")).rejects.not.toThrow("private");
   });
 
   it("rejects unsafe format selectors and paths outside the private directory", async () => {

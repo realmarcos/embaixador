@@ -89,6 +89,27 @@ O yt-dlp recebe `--proxy` apontando para o proxy **local** de proteção, que en
 
 A configuração vale para análise, download e redownload; não altera as conexões de banco, S3 ou frontend. Proxies de datacenter e rotação por requisição ainda podem ser bloqueados pelas plataformas; valide uma mídia pequena autorizada antes de usar em produção.
 
+### Diagnóstico de erros de análise
+
+A API mantém o envelope `error.code`, `error.message` e `error.requestId`. Falhas conhecidas de análise retornam mensagens seguras com uma ação sugerida; a interface exibe essa mensagem. Não são publicados stderr do yt-dlp, URLs privadas, comandos ou credenciais.
+
+| Código | O que verificar |
+|---|---|
+| `MEDIA_EXTRACTOR_UNAVAILABLE` | Caminho `YT_DLP_PATH`, instalação e permissões do executável. |
+| `MEDIA_ANALYSIS_TIMEOUT` | Tempo de resposta da plataforma, servidor e proxy; tente novamente. |
+| `MEDIA_PROXY_AUTHENTICATION_FAILED` | Usuário, senha e URL encoding em `YT_DLP_PROXY`; reinicie/recrie o backend após alterar. |
+| `MEDIA_PROXY_CONNECTION_FAILED` | Disponibilidade e configuração do proxy, incluindo suporte a CONNECT. |
+| `MEDIA_AUTHENTICATION_REQUIRED` | Link público e exigência de login/verificação na plataforma; login na plataforma não é suportado pela aplicação. |
+| `MEDIA_RATE_LIMITED` | Limite de requisições da plataforma; aguarde antes de tentar novamente. |
+| `MEDIA_ACCESS_DENIED` | Acesso público, bloqueio de IP e restrições da região do servidor/proxy. |
+| `MEDIA_UNAVAILABLE` | Mídia removida ou indisponível; confira o link. |
+| `MEDIA_TLS_FAILED` | Certificados do servidor/proxy; não desative a verificação TLS. |
+| `MEDIA_CONNECTION_FAILED` | DNS e conectividade do servidor/proxy. |
+| `MEDIA_ANALYSIS_INVALID_RESPONSE`, `MEDIA_NO_FORMATS` | Link compatível e atualização do yt-dlp. |
+| `MEDIA_ANALYSIS_FAILED` | Falha não classificada do extrator; confira acesso público, conectividade e versão do yt-dlp. |
+
+Nos erros HTTP `5xx`, o backend registra somente código, status e `requestId` para correlacionar a resposta com os logs. Erros internos não classificados continuam como `INTERNAL_SERVER_ERROR`, sem revelar mensagens arbitrárias ou dados privados. As categorias são inferidas de diagnósticos conhecidos; não garantem uma causa específica quando o provedor não informa o motivo. Por exemplo, uma falha de túnel sem status de autenticação indica problema de proxy, não necessariamente senha incorreta.
+
 3. Gere o client Prisma e aplique as migrações em um banco de desenvolvimento:
 
 ```sh

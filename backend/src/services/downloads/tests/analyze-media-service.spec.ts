@@ -165,12 +165,32 @@ describe("AnalyzeMediaService", () => {
     await expect(service.execute("https://www.youtube.com/watch?v=video-id")).rejects.toMatchObject({
       code: "MEDIA_ANALYSIS_FAILED",
       statusCode: 502,
-      message: "Unable to analyze this media right now",
+      message: "Unable to analyze this media. Check that the link is public; ask the administrator to check the analyzer and connection.",
     });
     await expect(
       service.execute("https://www.youtube.com/watch?v=video-id"),
     ).rejects.not.toThrow("private-secret");
     expect(log).not.toHaveBeenCalled();
+  });
+
+  it("preserves explicitly safe extractor errors for the HTTP response", async () => {
+    const error = new AppError({
+      code: "MEDIA_PROXY_AUTHENTICATION_FAILED",
+      message: "The proxy rejected authentication.",
+      statusCode: 502,
+      exposeMessage: true,
+    });
+    mediaExtractor.analyze.mockRejectedValue(error);
+    await expect(service.execute("https://www.youtube.com/watch?v=video-id")).rejects.toBe(error);
+  });
+
+  it("does not expose an untrusted application error from the extractor", async () => {
+    mediaExtractor.analyze.mockRejectedValue(new AppError({
+      code: "PRIVATE_ERROR", message: "proxy password=private-secret", statusCode: 502,
+    }));
+    await expect(service.execute("https://www.youtube.com/watch?v=video-id")).rejects.toMatchObject({
+      code: "MEDIA_ANALYSIS_FAILED", exposeMessage: true,
+    });
   });
 
   it("does not call the extractor when URL validation fails", async () => {

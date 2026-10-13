@@ -106,6 +106,34 @@ describe("media and download HTTP contract", () => {
     });
   });
 
+  it("returns safe analysis failures with their specific code and request ID", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    try {
+      analyzeMediaService.execute.mockRejectedValue(new AppError({
+        code: "MEDIA_PROXY_CONNECTION_FAILED",
+        message: "Could not connect through the media proxy.",
+        statusCode: 502,
+        exposeMessage: true,
+        details: "proxy-password-private",
+      }));
+      const response = await fetch(`${baseUrl}/media/analysis`, {
+        method: "POST", headers: { "content-type": "application/json", cookie: "embaixador_session=owner-token" },
+        body: JSON.stringify({ url: "https://youtube.com/watch?v=example" }),
+      });
+      const body = await readJson<{ error: { code: string; message: string; requestId: string } }>(response);
+      expect(response.status).toBe(502);
+      expect(body.error.code).toBe("MEDIA_PROXY_CONNECTION_FAILED");
+      expect(body.error.message).toBe("Could not connect through the media proxy.");
+      expect(body.error.requestId).not.toBe("");
+      expect(JSON.stringify(body)).not.toContain("private");
+      expect(log).toHaveBeenCalledWith("API request failed", {
+        code: body.error.code, requestId: body.error.requestId, statusCode: 502,
+      });
+    } finally {
+      log.mockRestore();
+    }
+  });
+
   it("requires authentication for media analysis and queues downloads with the authenticated owner", async () => {
     const anonymous = await fetch(`${baseUrl}/media/analysis`, {
       method: "POST",

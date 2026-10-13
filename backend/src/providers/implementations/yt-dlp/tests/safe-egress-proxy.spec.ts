@@ -271,9 +271,12 @@ describe("safe yt-dlp egress proxy", () => {
     });
     proxies.push(proxy);
     const url = await proxy.listen();
-    expect(await getThroughProxy(url)).toEqual({ status: 502, body: "Outbound media proxy is unavailable" });
+    expect(await getThroughProxy(url)).toEqual({
+      status: failure === "authentication" ? 407 : 502,
+      body: failure === "authentication" ? "Outbound media proxy authentication failed" : "Outbound media proxy is unavailable",
+    });
     const output = await tunnelThroughProxy(url);
-    expect(output).toContain("502 Bad Gateway");
+    expect(output).toContain(failure === "authentication" ? "407 Proxy Authentication Required" : "502 Bad Gateway");
     expect(output).not.toContain("upstream-private-secret");
     expect(connectTcp).not.toHaveBeenCalled();
   });

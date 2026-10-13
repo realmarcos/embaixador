@@ -1,9 +1,23 @@
 import type { Request, Response } from "express";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { AppError, serializeApiError } from "../../../errors/app-errors";
 import { errorHandlerMiddleware } from "../error-handler-middleware";
 
+afterEach(() => { vi.restoreAllMocks(); });
+
 describe("serializeApiError", () => {
+  it("preserves explicitly safe server errors without exposing diagnostics", () => {
+    const result = serializeApiError(new AppError({
+      code: "MEDIA_ANALYSIS_TIMEOUT", message: "Media analysis timed out.", statusCode: 504,
+      exposeMessage: true, details: "private proxy credentials",
+    }), "request-timeout");
+    expect(result).toEqual({
+      statusCode: 504,
+      body: { error: { code: "MEDIA_ANALYSIS_TIMEOUT", message: "Media analysis timed out.", requestId: "request-timeout" } },
+    });
+    expect(JSON.stringify(result)).not.toContain("private");
+  });
+
   it("preserves safe client errors without exposing details", () => {
     const result = serializeApiError(
       new AppError({
@@ -82,6 +96,7 @@ describe("errorHandlerMiddleware", () => {
   });
 
   it("sends the safe serialized envelope for unsent responses", () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const error = new Error("source URL token=private");
     const responseState = { statusCode: 0, body: undefined as unknown };
     const response = {
@@ -100,5 +115,8 @@ describe("errorHandlerMiddleware", () => {
 
     expect(responseState.statusCode).toBe(500);
     expect(JSON.stringify(responseState.body)).not.toContain("private");
+    expect(log.mock.calls[0]?.[0]).toBe("API request failed");
+    expect(log.mock.calls[0]?.[1]).toMatchObject({ code: "INTERNAL_SERVER_ERROR", statusCode: 500 });
+    expect(JSON.stringify(log.mock.calls)).not.toContain("private");
   });
 });

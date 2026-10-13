@@ -71,17 +71,17 @@ function respondBlocked(response: ServerResponse): void {
   response.end("Outbound destination is not allowed");
 }
 
-function respondUnavailable(response: ServerResponse): void {
+function respondUnavailable(response: ServerResponse, status = 502): void {
   if (response.headersSent) {
     response.destroy();
     return;
   }
-  response.writeHead(502, { "content-type": "text/plain; charset=utf-8", "connection": "close" });
-  response.end("Outbound media proxy is unavailable");
+  response.writeHead(status, { "content-type": "text/plain; charset=utf-8", "connection": "close" });
+  response.end(status === 407 ? "Outbound media proxy authentication failed" : "Outbound media proxy is unavailable");
 }
 
 function respondSocket(socket: Duplex, status: number): void {
-  const message = status === 403 ? "Forbidden" : "Bad Gateway";
+  const message = status === 403 ? "Forbidden" : status === 407 ? "Proxy Authentication Required" : "Bad Gateway";
   socket.end(`HTTP/1.1 ${status} ${message}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`);
 }
 
@@ -167,7 +167,7 @@ function createSafeEgressProxy({
       clearTimeout(responseTimer);
       if (proxy && (upstreamResponse.statusCode ?? 502) >= 400) {
         upstreamResponse.resume();
-        respondUnavailable(response);
+        respondUnavailable(response, upstreamResponse.statusCode === 407 ? 407 : 502);
         upstream.destroy();
         return;
       }
@@ -217,6 +217,7 @@ function createSafeEgressProxy({
     if (proxy) {
       const pinnedHost = isIP(address) === 6 ? `[${address}]` : address;
       const authority = `${pinnedHost}:${destination.port}`;
+      let failureStatus = 502;
       const upstream = requestHttp({
         hostname: hostnameWithoutBrackets(proxy.hostname),
         port: Number(proxy.port || 80),
@@ -229,6 +230,7 @@ function createSafeEgressProxy({
         agent: false,
       }, (response) => {
         response.resume();
+        failureStatus = response.statusCode === 407 ? 407 : 502;
         fail();
       });
       trackRequest(upstream);
@@ -238,7 +240,7 @@ function createSafeEgressProxy({
         if (settled) return;
         settled = true;
         clearTimeout(timer);
-        respondSocket(clientSocket, 502);
+        respondSocket(clientSocket, failureStatus);
         upstream.destroy();
       }
       clientSocket.once("close", () => {
@@ -250,6 +252,7 @@ function createSafeEgressProxy({
       upstream.on("error", fail);
       upstream.once("connect", (response, socket, upstreamHead) => {
         if (settled || response.statusCode !== 200 || clientSocket.destroyed) {
+          failureStatus = response.statusCode === 407 ? 407 : 502;
           socket.destroy();
           fail();
           return;
