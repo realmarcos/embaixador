@@ -2,18 +2,117 @@
 
 ## Arquitetura e persistencia
 
-- Frontend Next.js e backend Express em dois servicos Cloud Run.
-- MySQL 8.0 no **Cloud SQL**, fora dos containers: contas, historico, preferencias e fila permanecem apos reinicios e novos deploys.
-- Midias em um **bucket privado S3 externo**, fora dos containers. Este guia usa Amazon S3, compativel com o provider atual (incluindo criptografia SSE-S3).
-- Segredos no Secret Manager; imagens no Artifact Registry; migracoes Prisma em um Cloud Run Job separado.
+Você pode implantar a aplicação de duas formas:
+1. **Serviço Único Unificado (Recomendado)**: Usa o [Dockerfile](../Dockerfile) e o [docker-entrypoint.sh](../docker-entrypoint.sh) na raiz do projeto. O Cloud Run executa um único container que contém o frontend Next.js (porta `$PORT`), o backend Express API (porta interna 8081), `yt-dlp`, FFmpeg e executa as migrações Prisma na inicialização.
+2. **Dois Serviços Separados**: Usa o [compose.cloudrun.yaml](../compose.cloudrun.yaml) para construir e publicar imagens separadas de backend e frontend.
 
-O arquivo [compose.cloudrun.yaml](../compose.cloudrun.yaml) serve para **construir e publicar as imagens de producao**. Neste fluxo, o deploy e feito com `gcloud`, nao com `docker compose up`: redes, `depends_on` e volumes locais do Compose nao sao a infraestrutura do Cloud Run. Nao suba MySQL ou SeaweedFS como sidecars para tentar persistir dados. O [compose.yaml](../compose.yaml) continua sendo o ambiente de desenvolvimento com volumes locais.
+Em ambos os casos:
+- MySQL 8.0 no **Cloud SQL**, fora dos containers: contas, histórico, preferências e fila permanecem após reinícios e novos deploys.
+- Mídias em um **bucket privado S3 externo**, fora dos containers. Este guia usa Amazon S3, compatível com o provider atual (incluindo criptografia SSE-S3).
+- Segredos no Secret Manager; banco persistente conectado via socket Unix `/cloudsql/...`.
 
-O frontend encaminha `/api` para o backend usando um rewrite. Assim, o navegador recebe o cookie HttpOnly/Secure/SameSite=Lax na mesma origem da aplicacao. Nao configure o navegador para acessar diretamente outra URL `run.app`.
+Neste fluxo, o deploy é feito com `gcloud`, não com `docker compose up`: redes, `depends_on` e volumes locais do Compose não são a infraestrutura do Cloud Run. Não suba MySQL ou SeaweedFS como containers dentro do Cloud Run para tentar persistir dados. O [compose.yaml](../compose.yaml) continua sendo o ambiente de desenvolvimento com volumes locais.
 
-Este guia **nao implementa um provider nativo de Google Cloud Storage**. Nao substitua o endpoint S3 por um bucket GCS sem validar/adaptar a interoperabilidade do SDK, checksums e criptografia.
+---
 
-## 1. Requisitos e variaveis
+## Opção A: Deploy com Dockerfile Unificado (Recomendado)
+
+O [Dockerfile](../Dockerfile) na raiz permite compilar e implantar tudo com um único serviço no Cloud Run.
+
+### 1. Requisitos e variáveis
+
+```sh
+gcloud auth login
+export PROJECT_ID="seu-projeto"
+export REGION="southamerica-east1"
+export SQL_INSTANCE="embaixador-mysql"
+export INSTANCE_CONNECTION_NAME="${PROJECT_ID}:${REGION}:${SQL_INSTANCE}"
+export SERVICE_SA="embaixador-app@${PROJECT_ID}.iam.gserviceaccount.com"
+
+gcloud config set project "$PROJECT_ID"
+gcloud services enable run.googleapis.com sqladmin.googleapis.com \
+  artifactregistry.googleapis.com secretmanager.googleapis.com iam.googleapis.com
+
+gcloud iam service-accounts create embaixador-app
+gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+  --member="serviceAccount:${SERVICE_SA}" --role=roles/cloudsql.client
+```
+
+### 2. Banco persistente no Cloud SQL
+
+```sh
+gcloud sql instances create "$SQL_INSTANCE" \
+  --database-version=MYSQL_8_0 --edition=ENTERPRISE \
+  --region="$REGION" --tier=db-custom-1-3840 \
+  --storage-type=SSD --storage-size=10GB --storage-auto-increase \
+  --assign-ip --backup-start-time=03:00 --enable-bin-log \
+  --deletion-protection
+gcloud sql databases create embaixador --instance="$SQL_INSTANCE"
+
+DB_PASSWORD="$(openssl rand -hex 24)"
+gcloud sql users create embaixador --instance="$SQL_INSTANCE" \
+  --password="$DB_PASSWORD"
+printf 'mysql://embaixador:%s@localhost/embaixador?socket=/cloudsql/%s&connection_limit=5&pool_timeout=20' \
+  "$DB_PASSWORD" "$INSTANCE_CONNECTION_NAME" | \
+  gcloud secrets create embaixador-database-url --replication-policy=automatic --data-file=-
+unset DB_PASSWORD
+```
+
+### 3. Bucket e segredos
+
+No Secret Manager crie os segredos do S3 e as chaves:
+
+```sh
+openssl rand -hex 32 | tr -d '\n' | \
+  gcloud secrets create embaixador-jwt-key --replication-policy=automatic --data-file=-
+openssl rand -base64 32 | tr -d '\n' | \
+  gcloud secrets create embaixador-source-url-key --replication-policy=automatic --data-file=-
+
+for SECRET in embaixador-database-url embaixador-jwt-key embaixador-source-url-key \
+  embaixador-s3-access-key-id embaixador-s3-secret-access-key; do
+  gcloud secrets add-iam-policy-binding "$SECRET" \
+    --member="serviceAccount:${SERVICE_SA}" --role=roles/secretmanager.secretAccessor
+done
+
+export S3_BUCKET="seu-bucket-privado"
+export S3_REGION="sa-east-1"
+```
+
+### 4. Deploy no Cloud Run com o Dockerfile da raiz
+
+Você pode fazer o deploy direto a partir do código-fonte (o Cloud Run usará o [Dockerfile](../Dockerfile) na raiz automaticamente):
+
+```sh
+gcloud run deploy embaixador \
+  --source=. \
+  --region="$REGION" \
+  --execution-environment=gen2 \
+  --service-account="$SERVICE_SA" \
+  --allow-unauthenticated \
+  --port=8080 \
+  --add-cloudsql-instances="$INSTANCE_CONNECTION_NAME" \
+  --set-secrets="DATABASE_URL=embaixador-database-url:1,JWT_SIGNING_KEY=embaixador-jwt-key:1,SOURCE_URL_ENCRYPTION_KEY=embaixador-source-url-key:1,S3_ACCESS_KEY_ID=embaixador-s3-access-key-id:1,S3_SECRET_ACCESS_KEY=embaixador-s3-secret-access-key:1" \
+  --set-env-vars="NODE_ENV=production,FRONTEND_ORIGIN=https://example.invalid,S3_REGION=${S3_REGION},S3_BUCKET=${S3_BUCKET},RUN_MIGRATIONS=true" \
+  --no-cpu-throttling \
+  --min-instances=1 \
+  --max-instances=2 \
+  --cpu=2 \
+  --memory=4Gi \
+  --timeout=900s
+
+# Atualize o FRONTEND_ORIGIN com a URL pública gerada pelo Cloud Run
+export APP_URL="$(gcloud run services describe embaixador --region="$REGION" --format='value(status.url)')"
+gcloud run services update embaixador --region="$REGION" \
+  --update-env-vars="FRONTEND_ORIGIN=${APP_URL}"
+
+printf 'Aplicação rodando em: %s\n' "$APP_URL"
+```
+
+O container executa `RUN_MIGRATIONS=true` para aplicar o `prisma migrate deploy` no Cloud SQL, sobe o backend na porta `8081` e o Next.js na porta `8080` (repassando `/api` internamente).
+
+---
+
+## Opção B: Deploy com Serviços Separados (Frontend e Backend)
 
 Execute na raiz do repositorio, em Bash, com Docker Engine + Compose v2, Google Cloud CLI (`gcloud`) e OpenSSL instalados. Use um projeto com faturamento ativo. Sua identidade precisa poder habilitar APIs, criar Cloud SQL/Artifact Registry/contas de servico/segredos, conceder IAM, publicar imagens e implantar Cloud Run.
 
