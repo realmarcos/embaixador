@@ -1,5 +1,46 @@
 const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080/api";
 
+const errorMessages: Readonly<Record<string, string>> = {
+  INVALID_MEDIA_URL: "O link da mídia é inválido ou não é seguro. Confira o endereço e tente novamente.",
+  UNSUPPORTED_PLATFORM: "Esta plataforma não é suportada. Use um link do YouTube, Instagram ou Facebook.",
+  MEDIA_EXTRACTOR_UNAVAILABLE: "O analisador de mídia não está disponível. Peça ao administrador para verificar a instalação e as permissões do yt-dlp.",
+  MEDIA_ANALYSIS_TIMEOUT: "A análise demorou demais. Tente novamente; se o problema persistir, peça ao administrador para verificar o proxy e a conexão.",
+  MEDIA_PROXY_AUTHENTICATION_FAILED: "O proxy recusou a autenticação. Peça ao administrador para verificar o usuário e a senha do proxy.",
+  MEDIA_PROXY_CONNECTION_FAILED: "Não foi possível conectar pelo proxy de mídia. Peça ao administrador para verificar sua disponibilidade e configuração.",
+  MEDIA_AUTHENTICATION_REQUIRED: "A plataforma exige login ou verificação para acessar esta mídia. Use um link público; o aplicativo não permite login na plataforma.",
+  MEDIA_RATE_LIMITED: "A plataforma está limitando as solicitações. Aguarde antes de tentar novamente.",
+  MEDIA_ACCESS_DENIED: "A plataforma negou o acesso à mídia. Confira se o link é público e está disponível na região do servidor ou do proxy.",
+  MEDIA_UNAVAILABLE: "Esta mídia está indisponível ou foi removida. Confira o link ou tente outra mídia pública.",
+  MEDIA_TLS_FAILED: "Não foi possível verificar o certificado da conexão. Peça ao administrador para verificar os certificados e o proxy, sem desativar a verificação TLS.",
+  MEDIA_CONNECTION_FAILED: "Não foi possível acessar a plataforma. Verifique a conexão do servidor ou do proxy e tente novamente.",
+  MEDIA_ANALYSIS_INVALID_RESPONSE: "O analisador retornou uma resposta inválida. Confira o link e peça ao administrador para atualizar o yt-dlp.",
+  MEDIA_NO_FORMATS: "Nenhum formato de mídia compatível foi encontrado. Tente outro link público ou peça ao administrador para atualizar o yt-dlp.",
+  MEDIA_ANALYSIS_FAILED: "Não foi possível analisar a mídia. Confira se o link é público; peça ao administrador para verificar a conexão e atualizar o yt-dlp.",
+  MEDIA_DOWNLOAD_FAILED: "Não foi possível baixar a mídia. Tente novamente; se o problema persistir, peça ao administrador para verificar a conexão e o yt-dlp.",
+  MEDIA_CONVERSION_FAILED: "Não foi possível converter a mídia. Tente outro formato ou peça ao administrador para verificar o FFmpeg.",
+  MEDIA_DELETE_FAILED: "Não foi possível remover o arquivo agora. Tente novamente.",
+  MEDIA_STORAGE_WRITE_FAILED: "Não foi possível armazenar a mídia. Peça ao administrador para verificar o serviço de armazenamento.",
+  FORMAT_NOT_AVAILABLE: "O formato selecionado não está disponível. Analise o link novamente e escolha outro formato.",
+  DOWNLOAD_NOT_FOUND: "O download não foi encontrado.",
+  DOWNLOAD_NOT_READY: "Este download ainda não pode ser removido. Aguarde a conclusão do processamento.",
+  DOWNLOAD_CREATION_FAILED: "Não foi possível criar o download. Tente novamente.",
+  DOWNLOAD_PROCESSING_FAILED: "Não foi possível processar o download. Tente novamente.",
+  HISTORY_NOT_FOUND: "O item do histórico não foi encontrado.",
+  SOURCE_UNAVAILABLE: "Não é possível baixar esta mídia novamente. Informe um novo link público.",
+  INVALID_HISTORY_QUERY: "Os filtros do histórico são inválidos. Atualize a página e tente novamente.",
+  INVALID_SETTINGS: "As configurações informadas são inválidas. Confira os valores e tente novamente.",
+  INVALID_REQUEST: "Os dados informados são inválidos. Confira os campos e tente novamente.",
+  INVALID_CREDENTIALS: "E-mail ou senha inválidos.",
+  UNAUTHENTICATED: "Sua sessão expirou ou você não está conectado. Entre novamente.",
+  ACCOUNT_NOT_FOUND: "A conta não foi encontrada. Entre novamente.",
+  INVALID_NAME: "Informe um nome válido.",
+  INVALID_EMAIL: "Informe um e-mail válido.",
+  INVALID_PASSWORD: "A senha informada não atende aos requisitos. Confira as orientações do formulário.",
+  USER_ALREADY_EXISTS: "Já existe uma conta com este e-mail.",
+  EMAIL_ALREADY_IN_USE: "Este e-mail já está em uso.",
+  INTERNAL_SERVER_ERROR: "Ocorreu um erro interno no servidor. Tente novamente; se persistir, entre em contato com o suporte.",
+};
+
 export interface ApiErrorPayload {
   code: string;
   message: string;
@@ -115,8 +156,8 @@ async function request<T>(path: string, options: ApiRequestOptions = {}): Promis
   if (!response.ok) {
     const error = isRecord(payload) && isRecord(payload.error) ? payload.error : undefined;
     const code = typeof error?.code === "string" ? error.code : "REQUEST_FAILED";
-    const message = typeof error?.message === "string"
-      ? error.message
+    const message = Object.hasOwn(errorMessages, code)
+      ? errorMessages[code]
       : "Não foi possível concluir a solicitação. Tente novamente.";
     const requestId = typeof error?.requestId === "string" ? error.requestId : undefined;
     throw new ApiClientError(response.status, code, message, requestId);

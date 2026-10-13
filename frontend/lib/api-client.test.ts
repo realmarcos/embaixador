@@ -89,11 +89,60 @@ test("parses the safe API error envelope without exposing unstructured server te
     assert.ok(error instanceof ApiClientError);
     assert.equal(error.status, 400);
     assert.equal(error.code, "INVALID_MEDIA_URL");
-    assert.equal(error.message, "The media URL is invalid");
+    assert.equal(error.message, "O link da mídia é inválido ou não é seguro. Confira o endereço e tente novamente.");
     assert.equal(error.requestId, "request-123");
     return true;
   });
 });
+
+const analysisErrorMessages = {
+  MEDIA_EXTRACTOR_UNAVAILABLE: "O analisador de mídia não está disponível.",
+  MEDIA_ANALYSIS_TIMEOUT: "A análise demorou demais.",
+  MEDIA_PROXY_AUTHENTICATION_FAILED: "O proxy recusou a autenticação.",
+  MEDIA_PROXY_CONNECTION_FAILED: "Não foi possível conectar pelo proxy de mídia.",
+  MEDIA_AUTHENTICATION_REQUIRED: "A plataforma exige login ou verificação",
+  MEDIA_RATE_LIMITED: "A plataforma está limitando as solicitações.",
+  MEDIA_ACCESS_DENIED: "A plataforma negou o acesso à mídia.",
+  MEDIA_UNAVAILABLE: "Esta mídia está indisponível ou foi removida.",
+  MEDIA_TLS_FAILED: "Não foi possível verificar o certificado da conexão.",
+  MEDIA_CONNECTION_FAILED: "Não foi possível acessar a plataforma.",
+  MEDIA_ANALYSIS_INVALID_RESPONSE: "O analisador retornou uma resposta inválida.",
+  MEDIA_NO_FORMATS: "Nenhum formato de mídia compatível foi encontrado.",
+  MEDIA_ANALYSIS_FAILED: "Não foi possível analisar a mídia.",
+  INTERNAL_SERVER_ERROR: "Ocorreu um erro interno no servidor.",
+};
+
+for (const [code, message] of Object.entries(analysisErrorMessages)) {
+  test(`displays ${code} in Portuguese while preserving diagnostic identifiers`, async () => {
+    globalThis.fetch = (async () => new Response(JSON.stringify({
+      error: { code, message: "English backend message", requestId: "request-analysis" },
+    }), { status: 502, headers: { "content-type": "application/json" } })) as typeof fetch;
+    await assert.rejects(apiClient.analyzeMedia("https://youtube.com/watch?v=example"), (error: unknown) => {
+      assert.ok(error instanceof ApiClientError);
+      assert.equal(error.code, code);
+      assert.equal(error.status, 502);
+      assert.equal(error.requestId, "request-analysis");
+      assert.ok(error.message.startsWith(message));
+      assert.equal(error.message.includes("English"), false);
+      return true;
+    });
+  });
+}
+
+for (const code of ["NEW_UNKNOWN_ERROR", "toString", "__proto__"]) {
+  test(`uses a Portuguese fallback for unknown error code ${code}`, async () => {
+    globalThis.fetch = (async () => new Response(JSON.stringify({
+      error: { code, message: "English message with private data", requestId: "request-unknown" },
+    }), { status: 500, headers: { "content-type": "application/json" } })) as typeof fetch;
+    await assert.rejects(apiClient.getSettings(), (error: unknown) => {
+      assert.ok(error instanceof ApiClientError);
+      assert.equal(error.message, "Não foi possível concluir a solicitação. Tente novamente.");
+      assert.equal(error.code, code);
+      assert.equal(error.requestId, "request-unknown");
+      return true;
+    });
+  });
+}
 
 test("uses a generic safe message when an error response is not structured JSON", async () => {
   globalThis.fetch = (async () => new Response("database password leaked", { status: 500 })) as typeof fetch;
