@@ -99,6 +99,29 @@ function createSafeEgressProxy({
   const upstreamRequests = new Set<ClientRequest>();
   const upstreamSockets = new Set<Duplex>();
 
+  function logUpstreamFailure(
+    operation: "http" | "connect",
+    reason: "rejected" | "timeout" | "network",
+    response?: IncomingMessage,
+    error?: unknown,
+  ): void {
+    const providerCode = response?.headers["x-brd-err-code"];
+    const proxyStatus = response?.headers["proxy-status"];
+    const legacyCode = typeof providerCode === "string" && /^(?:client|server|peer)_\d{1,6}$/.test(providerCode)
+      ? providerCode : undefined;
+    const standardCode = typeof proxyStatus === "string"
+      ? /\b((?:client|server|peer)_\d{1,6})\b/.exec(proxyStatus)?.[1] : undefined;
+    const networkCode: unknown = error instanceof Error && "code" in error ? error.code : undefined;
+    const allowedNetworkCodes = ["ENOTFOUND", "EAI_AGAIN", "ECONNREFUSED", "ECONNRESET", "ETIMEDOUT", "ENETUNREACH", "EHOSTUNREACH"];
+    console.error("Media upstream proxy failed", {
+      operation,
+      reason,
+      ...(response ? { upstreamStatus: response.statusCode } : {}),
+      ...(legacyCode ?? standardCode ? { providerCode: legacyCode ?? standardCode } : {}),
+      ...(typeof networkCode === "string" && allowedNetworkCodes.includes(networkCode) ? { networkCode } : {}),
+    });
+  }
+
   function trackRequest(request: ClientRequest): void {
     upstreamRequests.add(request);
     request.once("close", () => upstreamRequests.delete(request));
@@ -166,6 +189,7 @@ function createSafeEgressProxy({
     }, (upstreamResponse) => {
       clearTimeout(responseTimer);
       if (proxy && (upstreamResponse.statusCode ?? 502) >= 400) {
+        logUpstreamFailure("http", "rejected", upstreamResponse);
         upstreamResponse.resume();
         respondUnavailable(response, upstreamResponse.statusCode === 407 ? 407 : 502);
         upstream.destroy();
@@ -177,20 +201,23 @@ function createSafeEgressProxy({
     });
     trackRequest(upstream);
     const responseTimer = proxy ? setTimeout(() => {
+      logUpstreamFailure("http", "timeout");
       respondUnavailable(response);
       upstream.destroy();
     }, upstreamTimeoutMs) : undefined;
     upstream.once("close", () => { clearTimeout(responseTimer); });
     if (proxy) {
       upstream.setTimeout(upstreamTimeoutMs, () => {
+        logUpstreamFailure("http", "timeout");
         respondUnavailable(response);
         upstream.destroy();
       });
     }
     request.once("aborted", () => upstream.destroy());
     response.once("close", () => upstream.destroy());
-    upstream.on("error", () => {
+    upstream.on("error", (error) => {
       if (proxy) {
+        logUpstreamFailure("http", "network", undefined, error);
         respondUnavailable(response);
         return;
       }
@@ -231,11 +258,15 @@ function createSafeEgressProxy({
       }, (response) => {
         response.resume();
         failureStatus = response.statusCode === 407 ? 407 : 502;
+        logUpstreamFailure("connect", "rejected", response);
         fail();
       });
       trackRequest(upstream);
       let settled = false;
-      const timer = setTimeout(fail, upstreamTimeoutMs);
+      const timer = setTimeout(() => {
+        if (!settled) logUpstreamFailure("connect", "timeout");
+        fail();
+      }, upstreamTimeoutMs);
       function fail(): void {
         if (settled) return;
         settled = true;
@@ -249,9 +280,13 @@ function createSafeEgressProxy({
         upstream.destroy();
       });
       clientSocket.once("error", fail);
-      upstream.on("error", fail);
+      upstream.on("error", (error) => {
+        if (!settled) logUpstreamFailure("connect", "network", undefined, error);
+        fail();
+      });
       upstream.once("connect", (response, socket, upstreamHead) => {
         if (settled || response.statusCode !== 200 || clientSocket.destroyed) {
+          if (!settled && !clientSocket.destroyed) logUpstreamFailure("connect", "rejected", response);
           failureStatus = response.statusCode === 407 ? 407 : 502;
           socket.destroy();
           fail();

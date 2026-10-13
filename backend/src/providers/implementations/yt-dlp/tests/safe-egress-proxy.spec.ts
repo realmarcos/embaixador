@@ -3,11 +3,15 @@ import type { ClientRequest, IncomingMessage, RequestOptions } from "node:http";
 import { Readable, Writable } from "node:stream";
 import { connect, Socket } from "node:net";
 import type { Duplex } from "node:stream";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createSafeEgressProxy } from "../safe-egress-proxy";
 
 const proxies: ReturnType<typeof createSafeEgressProxy>[] = [];
 const upstreamFixtures: { server: ReturnType<typeof createServer>; sockets: Set<Duplex> }[] = [];
+
+beforeEach(() => {
+  vi.spyOn(console, "error").mockImplementation(() => undefined);
+});
 
 afterEach(async () => {
   await Promise.all(proxies.splice(0).map((proxy) => proxy.close()));
@@ -17,6 +21,7 @@ afterEach(async () => {
       if (error) reject(error);
       else resolve();
     }));
+    vi.restoreAllMocks();
   }));
 });
 
@@ -86,6 +91,40 @@ function createProxy(resolveAddresses: (hostname: string) => Promise<string[]>):
 }
 
 describe("safe yt-dlp egress proxy", () => {
+  it.each([
+    [403, { "x-brd-err-code": "client_10070" }, "client_10070"],
+    [502, { "proxy-status": "brd.superproxy.io; error=connection_refused; details=\"peer_20001: private-secret\"" }, "peer_20001"],
+    [403, { "x-brd-err-code": "private-secret" }, undefined],
+  ])("logs safe provider diagnostics for rejected HTTP and CONNECT status %s", async (status, headers, providerCode) => {
+    const server = createServer((_request, response) => {
+      response.writeHead(status, { ...headers, "x-brd-err-msg": "private-secret" });
+      response.end("private-secret");
+    });
+    server.on("connect", (_request, socket) => {
+      const lines = Object.entries(headers).map(([name, value]) => `${name}: ${value}`);
+      socket.end(`HTTP/1.1 ${status} Rejected\r\n${lines.join("\r\n")}\r\nContent-Length: 0\r\n\r\n`);
+    });
+    const proxy = createSafeEgressProxy({
+      upstreamProxyUrl: await startUpstream(server),
+      resolveAddresses: vi.fn().mockResolvedValue(["8.8.8.8"]),
+    });
+    proxies.push(proxy);
+    const url = await proxy.listen();
+    expect((await getThroughProxy(url)).status).toBe(502);
+    expect(await tunnelThroughProxy(url)).toContain("502 Bad Gateway");
+    for (const operation of ["http", "connect"]) {
+      expect(console.error).toHaveBeenCalledWith("Media upstream proxy failed", {
+        operation, reason: "rejected", upstreamStatus: status,
+        ...(providerCode ? { providerCode } : {}),
+      });
+    }
+    const output = JSON.stringify(vi.mocked(console.error).mock.calls);
+    expect(output).not.toContain("private-secret");
+    expect(output).not.toContain("p@ss");
+    expect(output).not.toContain("cdn.example");
+    expect(output).not.toContain("127.0.0.1");
+  });
+
   it.each(["8.8.8.8", "2001:4860:4860::8888"])("forwards HTTP through an authenticated upstream to pinned IP %s", async (ip) => {
     const received = vi.fn();
     const server = createServer((request, response) => {
@@ -279,6 +318,16 @@ describe("safe yt-dlp egress proxy", () => {
     expect(output).toContain(failure === "authentication" ? "407 Proxy Authentication Required" : "502 Bad Gateway");
     expect(output).not.toContain("upstream-private-secret");
     expect(connectTcp).not.toHaveBeenCalled();
+    if (failure === "authentication") {
+      expect(console.error).toHaveBeenCalledWith("Media upstream proxy failed", {
+        operation: "connect", reason: "rejected", upstreamStatus: 407,
+      });
+    } else {
+      expect(console.error).toHaveBeenCalledWith("Media upstream proxy failed", {
+        operation: "connect", reason: failure === "timeout" ? "timeout" : "network",
+        ...(failure === "disconnect" ? { networkCode: "ECONNRESET" } : {}),
+      });
+    }
   });
 
   it("blocks an HTTP redirect target resolving to a private address", async () => {

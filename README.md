@@ -91,7 +91,7 @@ A configuração vale para análise, download e redownload; não altera as conex
 
 ### Diagnóstico de erros de análise
 
-A API mantém o envelope `error.code`, `error.message` e `error.requestId`. Falhas conhecidas de análise retornam mensagens seguras com uma ação sugerida; a interface exibe essa mensagem. Não são publicados stderr do yt-dlp, URLs privadas, comandos ou credenciais.
+A API mantém o envelope `error.code`, `error.message` e `error.requestId`. Falhas conhecidas de análise retornam mensagens seguras com uma ação sugerida; o cliente do frontend traduz os códigos conhecidos para português, preservando o código e o identificador para diagnóstico. Códigos desconhecidos exibem uma mensagem genérica em português, sem repassar texto arbitrário do servidor. Não são publicados stderr do yt-dlp, URLs privadas, comandos ou credenciais.
 
 | Código | O que verificar |
 |---|---|
@@ -109,6 +109,10 @@ A API mantém o envelope `error.code`, `error.message` e `error.requestId`. Falh
 | `MEDIA_ANALYSIS_FAILED` | Falha não classificada do extrator; confira acesso público, conectividade e versão do yt-dlp. |
 
 Nos erros HTTP `5xx`, o backend registra somente código, status e `requestId` para correlacionar a resposta com os logs. Erros internos não classificados continuam como `INTERNAL_SERVER_ERROR`, sem revelar mensagens arbitrárias ou dados privados. As categorias são inferidas de diagnósticos conhecidos; não garantem uma causa específica quando o provedor não informa o motivo. Por exemplo, uma falha de túnel sem status de autenticação indica problema de proxy, não necessariamente senha incorreta.
+
+Para falhas no proxy contratado, procure também `Media upstream proxy failed` nos logs do backend/Cloud Run. Esse registro informa `operation` (`http` ou `connect`), `reason` (`rejected`, `timeout` ou `network`), `upstreamStatus` original quando houver resposta, `providerCode` padronizado do Bright Data quando disponível e códigos de rede conhecidos como `ENOTFOUND`, `ECONNREFUSED` ou `ECONNRESET`. Não são registrados headers brutos, corpo da resposta, URL, credenciais ou destino. O código do provedor é extraído de `x-brd-err-code` ou `Proxy-Status` e pode ser consultado no [catálogo oficial de erros do Bright Data](https://docs.brightdata.com/proxy-networks/errorCatalog).
+
+Um `502` devolvido pelo proxy local não significa necessariamente que o Bright Data estava inacessível: confira `upstreamStatus` para distinguir uma resposta de recusa de uma falha de rede. Esses eventos de proxy não possuem o `requestId` da API; compare horário e operação e evite assumir uma correlação exata quando houver solicitações simultâneas. Restrições de zona por domínio também devem ser verificadas: a proteção local envia CONNECT para o IP público validado, não para o hostname original. Não remova essa proteção nem troque portas/protocolos sem confirmar a causa.
 
 3. Gere o client Prisma e aplique as migrações em um banco de desenvolvimento:
 
