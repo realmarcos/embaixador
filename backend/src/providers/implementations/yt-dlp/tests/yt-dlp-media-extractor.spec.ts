@@ -22,6 +22,44 @@ afterEach(async () => {
 });
 
 describe("YtDlpMediaExtractor", () => {
+  it.each([
+    ["https://youtube.com/watch?v=fixture", "Youtube", true],
+    ["https://instagram.com/p/fixture", "Instagram", false],
+    ["https://facebook.com/watch?v=fixture", "Facebook", false],
+  ] as const)("enables the current Node runtime only for YouTube: %s", async (url, extractorKey, enableNode) => {
+    const outputDirectory = await mkdtemp(join(tmpdir(), "embaixador-ytdlp-ejs-"));
+    temporaryDirectories.push(outputDirectory);
+    const outputFile = join(outputDirectory, "video.mp4");
+    const run = vi.fn<Runner>().mockImplementation(async (_executable, args, options) => {
+      expect(args.filter((argument) => argument === "--js-runtimes")).toHaveLength(enableNode ? 1 : 0);
+      if (enableNode) {
+        expect(args[args.indexOf("--js-runtimes") + 1]).toBe(`node:${process.execPath}`);
+      }
+      expect(args).toContain("--ignore-config");
+      expect(args).toContain("--no-plugin-dirs");
+      expect(args).toContain("--no-remote-components");
+      expect(args).not.toContain("--remote-components");
+      expect(args).not.toContain("--no-check-certificates");
+      expect(args[args.indexOf("--proxy") + 1]).toBe("http://127.0.0.1:43210");
+      expect(options.shell).toBe(false);
+      if (args.includes("--dump-single-json")) {
+        return JSON.stringify({
+          extractor_key: extractorKey, title: "Fixture",
+          formats: [{ format_id: "18", ext: "mp4", acodec: "aac", vcodec: "h264" }],
+        });
+      }
+      await writeFile(outputFile, "media");
+      return outputFile;
+    });
+    const extractor = new YtDlpMediaExtractor({
+      executablePath: "/usr/bin/yt-dlp", urlValidator: new ValidateMediaUrlService(),
+      proxyUrl: () => "http://127.0.0.1:43210", run,
+    });
+    await extractor.analyze(url);
+    await extractor.download({ url, formatId: "18", outputDirectory });
+    expect(run).toHaveBeenCalledTimes(2);
+  });
+
   it.each([undefined, false, true])("only skips certificate validation when explicitly enabled: %s", async (noCheckCertificates) => {
     const outputDirectory = await mkdtemp(join(tmpdir(), "embaixador-ytdlp-tls-"));
     temporaryDirectories.push(outputDirectory);

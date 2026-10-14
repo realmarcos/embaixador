@@ -293,6 +293,7 @@ class YtDlpMediaExtractor implements MediaExtractorProvider {
         this.dependencies.executablePath,
         [
           "--ignore-config",
+          ...(validated.platform === "YOUTUBE" ? ["--js-runtimes", `node:${process.execPath}`] : []),
           ...(proxyUrl ? ["--proxy", proxyUrl] : []),
           ...(this.dependencies.noCheckCertificates ? ["--no-check-certificates"] : []),
           "--no-plugin-dirs",
@@ -366,6 +367,7 @@ class YtDlpMediaExtractor implements MediaExtractorProvider {
         this.dependencies.executablePath,
         [
           "--ignore-config",
+          ...(validated.platform === "YOUTUBE" ? ["--js-runtimes", `node:${process.execPath}`] : []),
           ...(proxyUrl ? ["--proxy", proxyUrl] : []),
           ...(this.dependencies.noCheckCertificates ? ["--no-check-certificates"] : []),
           "--no-plugin-dirs",

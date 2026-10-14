@@ -9,6 +9,8 @@ A aplicação é compilada e executada através de um único [Dockerfile](../Doc
 - Segredos no Secret Manager; banco persistente conectado via socket Unix `/cloudsql/...`.
 - O [Dockerfile](../Dockerfile) é 100% autocontido (não depende de scripts shell externos) e pode ser construído tanto localmente quanto diretamente pelo Cloud Run via `gcloud run deploy --source .`.
 
+Para YouTube, as imagens instalam `yt-dlp[default]`, incluindo os scripts EJS compatíveis, e o backend habilita o Node existente com `--js-runtimes` na análise e no download. A atualização exige reconstruir a imagem e implantar uma nova revisão; reiniciar uma imagem antiga não instala EJS. Os componentes remotos e plugins continuam desativados. Caso a análise ainda falhe, investigue o diagnóstico do yt-dlp/proxy: essa configuração não elimina bloqueios ou exigências de login da plataforma.
+
 ---
 
 ## Proxy HTTP opcional para o yt-dlp

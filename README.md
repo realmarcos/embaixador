@@ -37,6 +37,10 @@ As dependências JavaScript/TypeScript estão declaradas nos manifests e lockfil
 
 Os caminhos `YT_DLP_PATH` e `FFMPEG_PATH` devem apontar para executáveis existentes e executáveis **no mesmo ambiente em que o backend roda**. Em ambientes isolados, como VS Code instalado via Flatpak, o caminho do host pode não existir dentro do sandbox; use caminhos visíveis ao processo do backend.
 
+Para YouTube, instale/atualize o yt-dlp com os scripts EJS compatíveis: `python -m pip install -U "yt-dlp[default]"` (use o Python/venv da sua instalação). Os dois Dockerfiles já incluem esse grupo de dependências. A análise e o download do YouTube habilitam explicitamente `--js-runtimes node:CAMINHO_DO_NODE` usando o mesmo executável Node do backend. O Node 24 da aplicação atende ao mínimo Node 22 exigido pelo yt-dlp; instalar Node sem habilitá-lo no yt-dlp não é suficiente. Veja o [guia oficial EJS](https://github.com/yt-dlp/yt-dlp/wiki/EJS).
+
+Os scripts são instalados no build, sem habilitar plugins ou downloads de componentes remotos durante as solicitações. Atualize yt-dlp e EJS juntos e reconstrua a imagem/reimplante o serviço para aplicar atualizações. Isso corrige a dependência de desafios JavaScript do YouTube, mas não garante acesso a vídeos sujeitos a bloqueios, login, restrições de região ou requisitos adicionais da plataforma.
+
 ## Configuração
 
 1. Instale as dependências de cada pacote:
