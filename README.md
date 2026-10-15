@@ -186,10 +186,6 @@ docker compose down
 
 `docker compose down` mantém os volumes nomeados. Para apagar também o banco e os objetos SeaweedFS locais, use `docker compose down -v`; essa operação é destrutiva.
 
-## Deploy no Google Cloud Run
-
-Para deploy em containers com banco persistente no Google Cloud Run, siga o [guia de deploy](docs/cloud-run.md). O [Dockerfile](Dockerfile) raiz permite o deploy unificado em um único serviço Cloud Run via `gcloud run deploy --source .`; alternativamente, o [Compose de produção](compose.cloudrun.yaml) permite construir imagens separadas para dois serviços. O banco persistente utiliza Cloud SQL MySQL e as mídias ficam em bucket S3 privado. Volumes locais do Compose não persistem dados no Cloud Run.
-
 ## Testes e qualidade
 
 Backend:
