@@ -4,6 +4,8 @@ Aplicação web para analisar mídias acessíveis em plataformas suportadas, ofe
 
 ## Opinião sincera sobre IA e SDD [LINK](RELATO-IA-SDD.md)
 
+Esse projeto foi construído exclusivamente com IA, aplicando as técnicas de desenvolvimento orientado a especificações ou SDD.
+
 > **Observação:** O desenvolvimento do projeto foi descontinuado. Embora tenha funcionado corretamente no último teste local, realizado em 19/10/2026, ele pode apresentar problemas quando hospedado em nuvem. Ainda assim, sua estrutura permite a expansão das funcionalidades.
 
 ## Visão geral
