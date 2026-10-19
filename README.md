@@ -1,6 +1,8 @@
-# Embaixador
+# Embaixador (DEPRECIADO)
 
 Aplicação web para analisar mídias acessíveis em plataformas suportadas, oferecer opções de formato e resolução e armazenar downloads em espaço privado por conta. O projeto também mantém histórico, preferências e prazo de retenção dos arquivos.
+
+> **Observação:** O desenvolvimento do projeto foi descontinuado. Embora tenha funcionado corretamente no último teste local, realizado em 19/10/2026, ele pode apresentar problemas quando hospedado em nuvem. Ainda assim, sua estrutura permite a expansão das funcionalidades.
 
 ## Visão geral
 
@@ -219,6 +221,7 @@ Testes de integração com provedores, MySQL ou S3 são opt-in e requerem servi�
 
 ## Documentação dos pacotes
 
+- [Relato sobre IA e SDD](RELATO-IA-SDD.md)
 - [Backend: configuração, API, workers e testes](backend/README.md)
 - [Frontend: desenvolvimento e verificações](frontend/README.md)
 - [Especificações e contratos](specs/)
